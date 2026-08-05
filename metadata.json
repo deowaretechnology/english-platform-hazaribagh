@@ -1,0 +1,6 @@
+{
+  "name": "English Platform Hazaribagh",
+  "description": "Official demo website for English Platform Hazaribagh coaching institute featuring course catalogs, video lectures, test series, online admissions, and student profile dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
