@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { backendSanityClient } from '../lib/sanity/sanity.js';
 import { connectToDatabase } from '../lib/db/mongodb.js';
 import { TestAttempt } from '../lib/db/models.js';
-import { testsData } from '../../../src/data/tests.js';
+import { testsData } from '../data/tests.js';
 
 function extractOptions(q: any): string[] {
   if (Array.isArray(q.options) && q.options.length > 0) {

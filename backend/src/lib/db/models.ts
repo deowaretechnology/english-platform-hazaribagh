@@ -1,30 +1,74 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Schema, type Model, type HydratedDocument } from "mongoose";
 
-export interface IUser extends Document {
+/* =========================
+   User Types
+========================= */
+
+export interface IUser {
   name: string;
   phone: string;
   classLevel: string;
-  enrolledCourses: Array<{
+  enrolledCourses: {
     courseSlug: string;
     courseTitle: string;
     enrolledAt: Date;
-  }>;
+  }[];
   createdAt: Date;
 }
 
-const UserSchema = new Schema<IUser>({
-  name: { type: String, required: true },
-  phone: { type: String, required: true, unique: true, index: true },
-  classLevel: { type: String, default: '10' },
-  enrolledCourses: [
-    {
-      courseSlug: { type: String, required: true },
-      courseTitle: { type: String, required: true },
-      enrolledAt: { type: Date, default: Date.now },
+export type UserDocument = HydratedDocument<IUser>;
+
+/* =========================
+   User Schema
+========================= */
+
+const UserSchema = new Schema<IUser>(
+  {
+    name: {
+      type: String,
+      required: true,
+      trim: true,
     },
-  ],
-  createdAt: { type: Date, default: Date.now },
-});
+    phone: {
+      type: String,
+      required: true,
+      unique: true,
+      index: true,
+      trim: true,
+    },
+    classLevel: {
+      type: String,
+      default: "10",
+    },
+    enrolledCourses: [
+      {
+        courseSlug: {
+          type: String,
+          required: true,
+        },
+        courseTitle: {
+          type: String,
+          required: true,
+        },
+        enrolledAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  {
+    versionKey: false,
+  }
+);
+
+/* =========================
+   Test Attempt Types
+========================= */
 
 export interface ITestAttemptQuestion {
   questionText: string;
@@ -34,7 +78,7 @@ export interface ITestAttemptQuestion {
   isCorrect: boolean;
 }
 
-export interface ITestAttempt extends Document {
+export interface ITestAttempt {
   userId: string;
   userPhone?: string;
   testSlug: string;
@@ -47,26 +91,88 @@ export interface ITestAttempt extends Document {
   submittedAt: Date;
 }
 
-const TestAttemptSchema = new Schema<ITestAttempt>({
-  userId: { type: String, required: true, index: true },
-  userPhone: { type: String },
-  testSlug: { type: String, required: true, index: true },
-  testTitle: { type: String, required: true },
-  classLevel: { type: String, default: '10' },
-  score: { type: Number, required: true },
-  totalQuestions: { type: Number, required: true },
-  accuracyPercent: { type: Number, required: true },
-  questions: [
-    {
-      questionText: { type: String, required: true },
-      options: [{ type: String }],
-      correctOption: { type: Number, required: true },
-      studentAnswer: { type: Number, required: true },
-      isCorrect: { type: Boolean, required: true },
-    },
-  ],
-  submittedAt: { type: Date, default: Date.now },
-});
+export type TestAttemptDocument = HydratedDocument<ITestAttempt>;
 
-export const User = mongoose.models.User || mongoose.model<IUser>('User', UserSchema, 'users');
-export const TestAttempt = mongoose.models.TestAttempt || mongoose.model<ITestAttempt>('TestAttempt', TestAttemptSchema, 'testattempts');
+/* =========================
+   Test Attempt Schema
+========================= */
+
+const TestAttemptSchema = new Schema<ITestAttempt>(
+  {
+    userId: {
+      type: String,
+      required: true,
+      index: true,
+    },
+    userPhone: String,
+    testSlug: {
+      type: String,
+      required: true,
+      index: true,
+    },
+    testTitle: {
+      type: String,
+      required: true,
+    },
+    classLevel: {
+      type: String,
+      default: "10",
+    },
+    score: {
+      type: Number,
+      required: true,
+    },
+    totalQuestions: {
+      type: Number,
+      required: true,
+    },
+    accuracyPercent: {
+      type: Number,
+      required: true,
+    },
+    questions: [
+      {
+        questionText: {
+          type: String,
+          required: true,
+        },
+        options: [
+          {
+            type: String,
+          },
+        ],
+        correctOption: {
+          type: Number,
+          required: true,
+        },
+        studentAnswer: {
+          type: Number,
+          required: true,
+        },
+        isCorrect: {
+          type: Boolean,
+          required: true,
+        },
+      },
+    ],
+    submittedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  {
+    versionKey: false,
+  }
+);
+
+/* =========================
+   Models
+========================= */
+
+export const User =
+  (mongoose.models.User as mongoose.Model<IUser>) ??
+  mongoose.model<IUser>("User", UserSchema);
+
+export const TestAttempt =
+  (mongoose.models.TestAttempt as mongoose.Model<ITestAttempt>) ??
+  mongoose.model<ITestAttempt>("TestAttempt", TestAttemptSchema);
