@@ -20,7 +20,18 @@ import qrImage from '../assets/qr.png';
 
 type Step = 'form' | 'payment' | 'success';
 
-const REGISTRATION_FEE = 2500;
+// Fallback fees for the hardcoded course list (used only when Sanity data isn't available
+// or a fetched course doesn't carry a `price` field). Update amounts here as needed.
+const FALLBACK_COURSE_FEES: Record<string, number> = {
+  'Class 10 JAC & CBSE English Mastery': 2500,
+  'Class 12 JAC & CBSE Core English Target Batch': 2500,
+  'Class 11 Academic & Competitive Foundation': 2200,
+  'Class 9 Strong Base English Foundation': 2000,
+  'Fluent Spoken English & Personality Development': 3000,
+  'SSC CGL, CHSL, Railway & NDA English Masterclass': 3500,
+};
+const DEFAULT_FEE = 2500;
+
 const UPI_ID = '6364240496@ybl';
 const UPI_NAME = '6364240496 (R.K. Yadav Sir)';
 const BANK_NAME = 'State Bank of India (SBI)';
@@ -64,6 +75,23 @@ export const AdmissionPage: React.FC = () => {
       })
       .catch(console.error);
   }, [prefilledCourse]);
+
+  // Works out the fee for whichever course is currently selected in the form.
+  // Priority: price from the Sanity-fetched course (if that field exists) -> fallback map -> default.
+  const getSelectedFee = (): number => {
+    const matchedCourse = courses.find((c) => c.title === formData.targetClass) as
+      | (Course & { price?: number })
+      | undefined;
+    if (matchedCourse?.price) {
+      return matchedCourse.price;
+    }
+    if (FALLBACK_COURSE_FEES[formData.targetClass]) {
+      return FALLBACK_COURSE_FEES[formData.targetClass];
+    }
+    return DEFAULT_FEE;
+  };
+
+  const selectedFee = getSelectedFee();
 
   // Step 1: Form -> Payment
   const handleContinueToPayment = (e: React.FormEvent) => {
@@ -111,7 +139,7 @@ export const AdmissionPage: React.FC = () => {
       `*School/College Name:* ${formData.schoolName ? formData.schoolName : 'Not provided'}`,
       ``,
       `*Payment Method:* ${paymentMethod}`,
-      `*Amount:* ₹${REGISTRATION_FEE}/-`,
+      `*Amount:* ₹${selectedFee}/-`,
       `*Transaction ID / UTR:* ${transactionId ? transactionId : 'N/A (Cash Payment)'}`,
       ``,
       `*I am attaching my payment screenshot along with this message.*`,
@@ -220,16 +248,16 @@ export const AdmissionPage: React.FC = () => {
                         </option>
                       ))
                     ) : (
-                      <>
-                        <option value="Class 10 JAC & CBSE English Mastery">Class 10 JAC & CBSE English Mastery</option>
-                        <option value="Class 12 JAC & CBSE Core English Target Batch">Class 12 JAC & CBSE Core English Target Batch</option>
-                        <option value="Class 11 Academic & Competitive Foundation">Class 11 Academic & Competitive Foundation</option>
-                        <option value="Class 9 Strong Base English Foundation">Class 9 Strong Base English Foundation</option>
-                        <option value="Fluent Spoken English & Personality Development">Fluent Spoken English & Personality Development</option>
-                        <option value="SSC CGL, CHSL, Railway & NDA English Masterclass">SSC CGL, CHSL, Railway & NDA English Masterclass</option>
-                      </>
+                      Object.keys(FALLBACK_COURSE_FEES).map((title) => (
+                        <option key={title} value={title}>
+                          {title}
+                        </option>
+                      ))
                     )}
                   </select>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Registration fee for this course: <strong className="text-blue-700">₹{selectedFee}/-</strong>
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -310,10 +338,13 @@ export const AdmissionPage: React.FC = () => {
               </div>
 
               <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-center justify-between">
-                <span className="text-xs font-bold text-blue-700 uppercase tracking-wider">
-                  Demo Class Registration Fee
-                </span>
-                <span className="text-lg font-black text-blue-700">₹{REGISTRATION_FEE}/-</span>
+                <div>
+                  <span className="text-xs font-bold text-blue-700 uppercase tracking-wider block">
+                    Fee for Selected Course
+                  </span>
+                  <span className="text-[11px] text-blue-600">{formData.targetClass}</span>
+                </div>
+                <span className="text-lg font-black text-blue-700">₹{selectedFee}/-</span>
               </div>
 
               <div>
@@ -343,7 +374,7 @@ export const AdmissionPage: React.FC = () => {
                         alt="Scan to Pay QR Code"
                         className="w-40 h-40 rounded-lg border border-slate-300 bg-white p-2"
                       />
-                      <span className="text-xs font-bold text-blue-700">Scan to Pay ₹{REGISTRATION_FEE}/-</span>
+                      <span className="text-xs font-bold text-blue-700">Scan to Pay ₹{selectedFee}/-</span>
                     </div>
                   )}
 
@@ -409,12 +440,16 @@ export const AdmissionPage: React.FC = () => {
                     <span className="text-slate-500">Account Holder:</span>
                     <span className="font-bold text-slate-900">{BANK_HOLDER}</span>
                   </div>
+                  <div className="flex justify-between pt-1 border-t border-slate-200">
+                    <span className="text-slate-500">Amount to Transfer:</span>
+                    <span className="font-black text-blue-700">₹{selectedFee}/-</span>
+                  </div>
                 </div>
               )}
 
               {paymentMethod === 'Pay Cash at Institute Counter' && (
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-700">
-                  You can pay <strong>₹{REGISTRATION_FEE}/-</strong> in cash directly at the reception desk,
+                  You can pay <strong>₹{selectedFee}/-</strong> in cash directly at the reception desk,
                   Ananda Chowk campus, at the time of your demo class. No online transaction ID needed —
                   just submit this form to confirm your seat.
                 </div>
@@ -470,8 +505,8 @@ export const AdmissionPage: React.FC = () => {
                 <h2 className="text-2xl font-black text-slate-900">Application Received!</h2>
                 <p className="text-slate-600 text-xs sm:text-sm">
                   Dear <strong className="text-slate-900">{formData.fullName}</strong>, your seat for 3 days
-                  free demo classes in <strong className="text-blue-600">{formData.targetClass}</strong> has
-                  been provisionally reserved.
+                  free demo classes in <strong className="text-blue-600">{formData.targetClass}</strong> (Fee: ₹
+                  {selectedFee}/-) has been provisionally reserved.
                 </p>
               </div>
 
