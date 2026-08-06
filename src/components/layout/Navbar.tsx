@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, GraduationCap, User as UserIcon, Phone, ChevronRight, LogOut } from 'lucide-react';
+import { Menu, X, User as UserIcon, Phone, ChevronRight, LogOut } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import logo from '../../assets/logo.png';
 
 export const Navbar: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -29,10 +30,12 @@ export const Navbar: React.FC = () => {
           
           {/* Logo */}
           <Link to="/" className="flex items-center gap-3 group">
-            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-700 to-indigo-800 p-0.5 shadow-md shadow-blue-500/10 group-hover:scale-105 transition-transform">
-              <div className="w-full h-full bg-blue-600 rounded-[10px] flex items-center justify-center">
-                <GraduationCap className="w-6 h-6 text-white" />
-              </div>
+            <div className="w-11 h-11 rounded-xl bg-white p-0.5 shadow-md shadow-blue-500/10 group-hover:scale-105 transition-transform overflow-hidden">
+              <img
+                src={logo}
+                alt="English Platform Hazaribagh Logo"
+                className="w-full h-full object-contain rounded-[10px]"
+              />
             </div>
             <div>
               <div className="font-extrabold text-lg sm:text-xl tracking-tight text-slate-900 leading-tight flex items-center gap-1.5">
@@ -66,7 +69,7 @@ export const Navbar: React.FC = () => {
 
           {/* User Auth / Call Buttons */}
           <div className="hidden md:flex items-center space-x-3">
-            <a
+            
               href="tel:+919876543210"
               className="flex items-center gap-1.5 text-xs text-slate-700 hover:text-blue-600 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 transition-colors"
             >

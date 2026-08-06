@@ -318,7 +318,7 @@ export const HomePage: React.FC = () => {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8 divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
             
             <div className="pt-4 sm:pt-0 sm:pl-0 space-y-1 text-center sm:text-left">
-              <div className="text-3xl sm:text-4xl font-black text-blue-600 tracking-tight">15+ Years</div>
+              <div className="text-3xl sm:text-4xl font-black text-blue-600 tracking-tight">5+ Years</div>
               <div className="text-xs sm:text-sm font-bold text-slate-800 uppercase tracking-wider">Faculty Excellence</div>
               <p className="text-xs text-slate-500">Trusted in Hazaribagh since 2014</p>
             </div>
@@ -330,13 +330,13 @@ export const HomePage: React.FC = () => {
             </div>
 
             <div className="pt-4 sm:pt-0 sm:pl-6 space-y-1 text-center sm:text-left">
-              <div className="text-3xl sm:text-4xl font-black text-blue-600 tracking-tight">96%</div>
+              <div className="text-3xl sm:text-4xl font-black text-blue-600 tracking-tight">100%</div>
               <div className="text-xs sm:text-sm font-bold text-slate-800 uppercase tracking-wider">Board Result Rate</div>
               <p className="text-xs text-slate-500">Consistent district toppers</p>
             </div>
 
             <div className="pt-4 sm:pt-0 sm:pl-6 space-y-1 text-center sm:text-left">
-              <div className="text-3xl sm:text-4xl font-black text-blue-600 tracking-tight">100+</div>
+              <div className="text-3xl sm:text-4xl font-black text-blue-600 tracking-tight">10+</div>
               <div className="text-xs sm:text-sm font-bold text-slate-800 uppercase tracking-wider">Govt Selections</div>
               <p className="text-xs text-slate-500">SSC, Railway & Defence exams</p>
             </div>
@@ -664,7 +664,7 @@ export const HomePage: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
               {
-                title: '15+ Years Combined Faculty Experience',
+                title: '5+ Years Combined Faculty Experience',
                 desc: 'Taught by Er. R.K. Verma & senior subject experts with deep insight into JAC & CBSE marking schemes.',
                 icon: Award
               },

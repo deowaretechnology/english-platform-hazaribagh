@@ -27,7 +27,7 @@ export const Footer: React.FC = () => {
 
             <div className="pt-2 flex items-center space-x-3">
               <a
-                href="https://facebook.com"
+                href="https://www.facebook.com/share/1C8v2uWkjL/"
                 target="_blank"
                 rel="noreferrer"
                 className="w-9 h-9 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 hover:text-blue-400 hover:border-blue-500/50 transition-colors"
@@ -36,7 +36,7 @@ export const Footer: React.FC = () => {
                 <Facebook className="w-4 h-4" />
               </a>
               <a
-                href="https://youtube.com"
+                href="https://www.youtube.com/@apnaenglishplatform"
                 target="_blank"
                 rel="noreferrer"
                 className="w-9 h-9 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 hover:text-blue-400 hover:border-blue-500/50 transition-colors"
@@ -45,7 +45,7 @@ export const Footer: React.FC = () => {
                 <Youtube className="w-4 h-4" />
               </a>
               <a
-                href="https://instagram.com"
+                href="https://www.instagram.com/english_platform_hazaribag?igsh=Z2duYWF0YmdqeXE1"
                 target="_blank"
                 rel="noreferrer"
                 className="w-9 h-9 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 hover:text-blue-400 hover:border-blue-500/50 transition-colors"
