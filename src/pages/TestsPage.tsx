@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Clock, HelpCircle, Play, CheckCircle, Lock, AlertCircle } from 'lucide-react';
 import { fetchTestsFromSanity } from '../lib/sanity/queries';
+import { getApiUrl } from '../lib/api';
 import { ClassFilter } from '../components/ui/ClassFilter';
 import { ClassLevel, Test } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -61,7 +62,7 @@ export const TestsPage: React.FC = () => {
 
       // 2. Fetch server DB attempts
       try {
-        const res = await fetch(`/api/auth/user/${identifier}`);
+        const res = await fetch(getApiUrl(`/api/auth/user/${identifier}`));
         const data = await res.json();
         if (data.success && data.attempts) {
           data.attempts.forEach((att: any) => {

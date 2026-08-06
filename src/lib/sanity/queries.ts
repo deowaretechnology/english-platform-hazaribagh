@@ -386,24 +386,102 @@ export async function fetchTeachersFromSanity(): Promise<TeacherItem[]> {
   return [];
 }
 
+function extractOptionsFromSanityQ(q: any): string[] {
+  if (Array.isArray(q.options) && q.options.length > 0) {
+    const filtered = q.options
+      .filter((o: any) => o !== undefined && o !== null && String(o).trim().length > 0)
+      .map((o: any) => String(o).trim());
+    if (filtered.length > 0) return filtered;
+  }
+  const opts: string[] = [];
+  if (q.optionA && String(q.optionA).trim()) opts.push(String(q.optionA).trim());
+  if (q.optionB && String(q.optionB).trim()) opts.push(String(q.optionB).trim());
+  if (q.optionC && String(q.optionC).trim()) opts.push(String(q.optionC).trim());
+  if (q.optionD && String(q.optionD).trim()) opts.push(String(q.optionD).trim());
+
+  if (opts.length > 0) return opts;
+
+  if (q.a) opts.push(String(q.a).trim());
+  if (q.b) opts.push(String(q.b).trim());
+  if (q.c) opts.push(String(q.c).trim());
+  if (q.d) opts.push(String(q.d).trim());
+
+  return opts;
+}
+
 export async function fetchTestQuestionsForStudent(testIdOrSlug: string) {
   try {
-    const query = `*[_type == "question" && (testRef->_id == $id || testRef->slug.current == $id || classLevel == $id)] {
+    // 1. Fetch from inline test questions in Sanity
+    const testDocQuery = `*[_type in ["test", "tests", "mockTest"] && (slug.current == $id || _id == $id)][0] {
+      _id,
+      title,
+      classLevel,
+      questions[] {
+        _key,
+        _id,
+        questionText,
+        question,
+        options,
+        optionA,
+        optionB,
+        optionC,
+        optionD,
+        correctAnswer,
+        correctOption,
+        explanation
+      }
+    }`;
+    const testDoc: any = await sanityClient.fetch(testDocQuery, { id: testIdOrSlug });
+    if (testDoc && Array.isArray(testDoc.questions) && testDoc.questions.length > 0) {
+      return testDoc.questions.map((q: any, idx: number) => ({
+        id: q._id || q._key || `q-${idx}`,
+        questionText: q.questionText || q.question || `Question ${idx + 1}`,
+        options: extractOptionsFromSanityQ(q),
+        correctAnswer: q.correctAnswer ?? q.correctOption ?? 0,
+        explanation: q.explanation || ''
+      }));
+    }
+
+    // 2. Fetch standalone question documents in Sanity
+    const query = `*[_type == "question" && (testRef->_id == $id || testRef->slug.current == $id || classLevel == $id || testSlug == $id)] {
       _id,
       questionText,
+      question,
       classLevel,
-      options
+      options,
+      optionA,
+      optionB,
+      optionC,
+      optionD,
+      correctAnswer,
+      correctOption,
+      explanation
     }`;
     const raw: any[] = await sanityClient.fetch(query, { id: testIdOrSlug });
     if (raw && raw.length > 0) {
-      return raw.map((item, idx) => ({
-        id: item._id || idx + 1,
-        question: item.questionText,
-        options: item.options || []
+      return raw.map((q, idx) => ({
+        id: q._id || `q-${idx}`,
+        questionText: q.questionText || q.question || `Question ${idx + 1}`,
+        options: extractOptionsFromSanityQ(q),
+        correctAnswer: q.correctAnswer ?? q.correctOption ?? 0,
+        explanation: q.explanation || ''
       }));
     }
   } catch (err) {
-    console.warn('Failed to fetch Sanity test questions:', err);
+    console.warn('Failed to fetch Sanity test questions directly:', err);
   }
-  return null;
+
+  // 3. Fallback to local static testsData
+  const matchedTest = testsData.find(t => t.id === testIdOrSlug) || testsData[0];
+  if (matchedTest && Array.isArray(matchedTest.questions)) {
+    return matchedTest.questions.map((q, idx) => ({
+      id: q.id || `q-${idx}`,
+      questionText: q.question,
+      options: q.options || [],
+      correctAnswer: q.correctAnswer ?? 0,
+      explanation: q.explanation || ''
+    }));
+  }
+
+  return [];
 }

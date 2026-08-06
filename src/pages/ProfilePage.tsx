@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { getApiUrl } from '../lib/api';
 import {
   User as UserIcon,
   Award,
@@ -64,7 +65,7 @@ export const ProfilePage: React.FC = () => {
 
       let dbAttempts: DBTestAttempt[] = [];
       try {
-        const res = await fetch(`/api/auth/user/${identifier}`);
+        const res = await fetch(getApiUrl(`/api/auth/user/${identifier}`));
         const data = await res.json();
         if (data.success && data.attempts) {
           dbAttempts = data.attempts;

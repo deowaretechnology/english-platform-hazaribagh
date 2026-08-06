@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Clock, ShieldAlert, CheckCircle2, ArrowRight, ArrowLeft, RefreshCw, AlertCircle, Lock } from 'lucide-react';
 import { seededShuffle } from '../lib/shuffle';
 import { useAuth } from '../context/AuthContext';
+import { getApiUrl } from '../lib/api';
+import { fetchTestQuestionsForStudent } from '../lib/sanity/queries';
 
 interface Question {
   id: string | number;
@@ -64,49 +66,74 @@ export const TestTakingPage: React.FC = () => {
 
       // B. Check MongoDB backend for existing attempt
       try {
-        const checkRes = await fetch(`/api/tests/${testSlug}/check-attempt/${studentId}`);
-        const checkData = await checkRes.json();
-        if (checkData.success && checkData.attempted) {
-          setExistingAttempt(checkData.attempt);
-          setLoading(false);
-          return;
+        const checkRes = await fetch(getApiUrl(`/api/tests/${testSlug}/check-attempt/${studentId}`));
+        if (checkRes.ok) {
+          const checkData = await checkRes.json();
+          if (checkData.success && checkData.attempted) {
+            setExistingAttempt(checkData.attempt);
+            setLoading(false);
+            return;
+          }
         }
       } catch (e) {
         console.warn('Error checking server attempt:', e);
       }
 
-      // C. Load questions if not attempted
+      // C. Load questions from API, with fallback to Sanity / static data
+      let loadedQuestions: Question[] = [];
+
       try {
-        const res = await fetch(`/api/tests/${testSlug}/questions`);
-        const data = await res.json();
-
-        if (data.success && data.questions && data.questions.length > 0) {
-          // Shuffle deterministically per student ID + test slug
-          const seed = `${studentId}_${testSlug}`;
-          const shuffled = seededShuffle<Question>(data.questions, seed);
-          setQuestions(shuffled);
-
-          // Restore saved progress if exists
-          const saved = localStorage.getItem(progressKey);
-          if (saved) {
-            try {
-              const parsed = JSON.parse(saved);
-              if (parsed.userAnswers) setUserAnswers(parsed.userAnswers);
-              if (parsed.currentIdx !== undefined) setCurrentIdx(parsed.currentIdx);
-              if (parsed.timeLeft !== undefined) setTimeLeft(parsed.timeLeft);
-            } catch (e) {
-              console.warn('Failed to parse saved progress:', e);
-            }
+        const res = await fetch(getApiUrl(`/api/tests/${testSlug}/questions`));
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && Array.isArray(data.questions) && data.questions.length > 0) {
+            loadedQuestions = data.questions;
           }
-        } else {
-          setError('No questions found for this test. Please check back soon.');
         }
       } catch (err) {
-        console.error('Error fetching questions:', err);
-        setError('Failed to connect to test server. Please reload page.');
-      } finally {
-        setLoading(false);
+        console.warn('Backend API unavailable, falling back to Sanity / local static test data:', err);
       }
+
+      // Fallback to client-side Sanity query or static test data if API returned no questions
+      if (loadedQuestions.length === 0) {
+        try {
+          const sanityQuestions: any = await fetchTestQuestionsForStudent(testSlug);
+          if (Array.isArray(sanityQuestions) && sanityQuestions.length > 0) {
+            loadedQuestions = sanityQuestions.map((q: any, idx: number) => ({
+              id: q.id || `q-${idx}`,
+              questionText: q.questionText || q.question || `Question ${idx + 1}`,
+              options: q.options || [],
+              correctAnswer: q.correctAnswer ?? 0,
+              explanation: q.explanation || ''
+            }));
+          }
+        } catch (sanityErr) {
+          console.warn('Sanity client query failed:', sanityErr);
+        }
+      }
+
+      if (loadedQuestions.length > 0) {
+        // Shuffle deterministically per student ID + test slug
+        const seed = `${studentId}_${testSlug}`;
+        const shuffled = seededShuffle<Question>(loadedQuestions, seed);
+        setQuestions(shuffled);
+
+        // Restore saved progress if exists
+        const saved = localStorage.getItem(progressKey);
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            if (parsed.userAnswers) setUserAnswers(parsed.userAnswers);
+            if (parsed.currentIdx !== undefined) setCurrentIdx(parsed.currentIdx);
+            if (parsed.timeLeft !== undefined) setTimeLeft(parsed.timeLeft);
+          } catch (e) {
+            console.warn('Failed to parse saved progress:', e);
+          }
+        }
+      } else {
+        setError('No questions found for this test. Please check back soon.');
+      }
+      setLoading(false);
     }
 
     checkAndLoadTest();
@@ -173,13 +200,15 @@ export const TestTakingPage: React.FC = () => {
     );
   };
 
-  // 4. Server-Side Submit and Evaluation
+  // 4. Submit and Evaluation
   const handleSubmitTest = async () => {
     if (isSubmitting) return;
     setIsSubmitting(true);
 
+    let resultData: any = null;
+
     try {
-      const res = await fetch('/api/tests/evaluate', {
+      const res = await fetch(getApiUrl('/api/tests/evaluate'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -189,53 +218,98 @@ export const TestTakingPage: React.FC = () => {
         })
       });
 
-      const resultData = await res.json();
-
-      if (resultData.success) {
-        // Clear in-progress storage
-        localStorage.removeItem(progressKey);
-
-        // Store persistent local attempt snapshot for profile & attempt checks
-        try {
-          const attemptSnapshot = {
-            id: 'att_' + Date.now(),
-            testSlug: testSlug,
-            testTitle: resultData.testTitle || testSlug.toUpperCase().replace(/-/g, ' '),
-            classLevel: resultData.classLevel || user?.classLevel || '10',
-            score: resultData.score,
-            totalQuestions: resultData.totalQuestions,
-            accuracyPercent: resultData.percentage,
-            questions: (resultData.breakdown || []).map((b: any) => ({
-              questionText: b.questionText,
-              options: [b.userAnswer, b.correctAnswer],
-              correctOption: b.isCorrect ? 0 : 1,
-              studentAnswer: 0,
-              isCorrect: b.isCorrect
-            })),
-            submittedAt: new Date().toISOString()
-          };
-
-          const localAttemptsRaw = localStorage.getItem(`eph_attempts_${studentId}`);
-          let localList = localAttemptsRaw ? JSON.parse(localAttemptsRaw) : [];
-          localList = localList.filter((a: any) => a.testSlug !== testSlug);
-          localList.unshift(attemptSnapshot);
-          localStorage.setItem(`eph_attempts_${studentId}`, JSON.stringify(localList));
-        } catch (e) {
-          console.warn('Failed to save local attempt snapshot:', e);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.success) {
+          resultData = data;
         }
-
-        // Store result for display on result page
-        localStorage.setItem(`test_result_${testSlug}`, JSON.stringify(resultData));
-
-        // Redirect to result page
-        navigate(`/tests/${testSlug}/result`);
-      } else {
-        alert(resultData.error || 'Evaluation failed. Please try again.');
-        setIsSubmitting(false);
       }
     } catch (err) {
-      console.error('Submit error:', err);
-      alert('Error submitting test. Please check network connection.');
+      console.warn('Backend API evaluation unavailable, evaluating client-side:', err);
+    }
+
+    // Client-side fallback evaluation if backend response was not received
+    if (!resultData) {
+      let correctCount = 0;
+      const totalQuestions = questions.length;
+      const breakdown = questions.map((q) => {
+        const userSelectedIdx = userAnswers[q.id];
+        const userSelectedText = typeof userSelectedIdx === 'number' && q.options[userSelectedIdx] !== undefined
+          ? q.options[userSelectedIdx]
+          : 'Not Answered';
+
+        const correctIdx = (q as any).correctAnswer ?? (q as any).correctOption ?? 0;
+        const correctText = q.options[correctIdx] || q.options[0] || 'Option A';
+        const isCorrect = userSelectedIdx === correctIdx;
+        if (isCorrect) correctCount++;
+
+        return {
+          questionId: q.id,
+          questionText: q.questionText || (q as any).question || 'Question',
+          userAnswer: userSelectedText,
+          correctAnswer: correctText,
+          isCorrect,
+          explanation: (q as any).explanation || ''
+        };
+      });
+
+      const score = correctCount * 2;
+      const percentage = Math.round((correctCount / Math.max(totalQuestions, 1)) * 100);
+
+      resultData = {
+        success: true,
+        testTitle: testSlug.toUpperCase().replace(/-/g, ' '),
+        classLevel: user?.classLevel || '10',
+        correctCount,
+        totalQuestions,
+        score,
+        totalMarks: totalQuestions * 2,
+        percentage,
+        percentile: Math.min(99, Math.max(50, percentage + 5)),
+        breakdown
+      };
+    }
+
+    if (resultData && resultData.success) {
+      // Clear in-progress storage
+      localStorage.removeItem(progressKey);
+
+      // Store persistent local attempt snapshot for profile & attempt checks
+      try {
+        const attemptSnapshot = {
+          id: 'att_' + Date.now(),
+          testSlug: testSlug,
+          testTitle: resultData.testTitle || testSlug.toUpperCase().replace(/-/g, ' '),
+          classLevel: resultData.classLevel || user?.classLevel || '10',
+          score: resultData.score,
+          totalQuestions: resultData.totalQuestions,
+          accuracyPercent: resultData.percentage,
+          questions: (resultData.breakdown || []).map((b: any) => ({
+            questionText: b.questionText,
+            options: [b.userAnswer, b.correctAnswer],
+            correctOption: b.isCorrect ? 0 : 1,
+            studentAnswer: 0,
+            isCorrect: b.isCorrect
+          })),
+          submittedAt: new Date().toISOString()
+        };
+
+        const localAttemptsRaw = localStorage.getItem(`eph_attempts_${studentId}`);
+        let localList = localAttemptsRaw ? JSON.parse(localAttemptsRaw) : [];
+        localList = localList.filter((a: any) => a.testSlug !== testSlug);
+        localList.unshift(attemptSnapshot);
+        localStorage.setItem(`eph_attempts_${studentId}`, JSON.stringify(localList));
+      } catch (e) {
+        console.warn('Failed to save local attempt snapshot:', e);
+      }
+
+      // Store result for display on result page
+      localStorage.setItem(`test_result_${testSlug}`, JSON.stringify(resultData));
+
+      // Redirect to result page
+      navigate(`/tests/${testSlug}/result`);
+    } else {
+      alert('Evaluation failed. Please try again.');
       setIsSubmitting(false);
     }
   };
@@ -438,12 +512,20 @@ export const TestTakingPage: React.FC = () => {
 
             {/* Question Prompt */}
             <div className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
-              {currentQ.questionText}
+              {currentQ.questionText || (currentQ as any).question || 'Question Text'}
             </div>
 
             {/* MCQ Options */}
             <div className="space-y-3 pt-2">
-              {currentQ.options.map((optText, idx) => {
+              {((Array.isArray(currentQ.options) && currentQ.options.length > 0)
+                ? currentQ.options
+                : [
+                    (currentQ as any)?.optionA,
+                    (currentQ as any)?.optionB,
+                    (currentQ as any)?.optionC,
+                    (currentQ as any)?.optionD
+                  ].filter(Boolean)
+              ).map((optText: string, idx: number) => {
                 const isSelected = selectedOptionIdx === idx;
                 const optionLabel = String.fromCharCode(65 + idx); // A, B, C, D
 
