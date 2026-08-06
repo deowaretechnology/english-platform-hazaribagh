@@ -44,6 +44,8 @@ export default defineType({
           { title: 'Class 11', value: '11' },
           { title: 'Class 12 (Board)', value: '12' },
           { title: 'All Classes', value: 'all' },
+          { title: 'Competitive', value: 'Competitive' },
+          { title: 'Spoken', value: 'Spoken' },
         ],
       },
       validation: (Rule) => Rule.required(),
