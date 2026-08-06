@@ -43,6 +43,23 @@ export const AdmissionPage: React.FC = () => {
     setSubmittedAppId(appId);
   };
 
+  // Builds a complete, formatted WhatsApp message with every field the student filled
+  const buildWhatsAppMessage = (appId: string) => {
+    const lines = [
+      `Hi, I submitted the online admission form on the website. Please confirm my demo class timing.`,
+      ``,
+      `*Application ID:* ${appId}`,
+      `*Student Name:* ${formData.fullName}`,
+      `*Phone Number:* ${formData.phone}`,
+      `*WhatsApp Number:* ${formData.whatsapp ? formData.whatsapp : formData.phone}`,
+      `*Target Course/Class:* ${formData.targetClass}`,
+      `*Preferred Batch Timing:* ${formData.batchTiming}`,
+      `*Learning Mode:* ${formData.mode}`,
+      `*School/College Name:* ${formData.schoolName ? formData.schoolName : 'Not provided'}`,
+    ];
+    return lines.join('\n');
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 py-12 px-4 sm:px-6 lg:px-8 space-y-12">
       
@@ -223,10 +240,8 @@ export const AdmissionPage: React.FC = () => {
               </div>
 
               <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
-                <a
-                  href={`https://wa.me/916364240496?text=${encodeURIComponent(
-                    `Hi, I submitted online admission form on website for ${formData.fullName} (Application ID: ${submittedAppId}). Please confirm my demo class timing.`
-                  )}`}
+                
+                <a  href={`https://wa.me/916364240496?text=${encodeURIComponent(buildWhatsAppMessage(submittedAppId))}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm"

@@ -2,7 +2,7 @@ import React from 'react';
 import { MessageCircle } from 'lucide-react';
 
 export const WhatsAppButton: React.FC = () => {
-  const whatsappNumber = '919876543210';
+  const whatsappNumber = '916364240496';
   const defaultMessage = encodeURIComponent(
     'Hi, I want to know more about English Platform Hazaribagh courses, fees, and batch timings.'
   );
