@@ -1,21 +1,51 @@
-export type ClassLevel = '9' | '10' | '11' | '12' | 'spoken-english' | 'competitive' | 'all';
+export type ClassLevel =
+  | '9'
+  | '10'
+  | '11'
+  | '12'
+  | 'spoken-english'
+  | 'competitive'
+  | 'all';
 
 export interface Course {
   id: string;
   title: string;
   subtitle: string;
+
   class: Exclude<ClassLevel, 'all'>;
+
   price: number;
   originalPrice: number;
+
   duration: string;
   batchTiming: string;
-  mode: 'Offline' | 'Online' | 'Hybrid';
-  seatsLeft: number;
-  isPopular?: boolean;
-  features: string[];
-  instructor: string;
-}
 
+  mode: 'Offline' | 'Online' | 'Hybrid';
+
+  seatsLeft: number;
+
+  isPopular?: boolean;
+
+  badge?: string;
+
+  language?: string;
+
+  ctaText?: string;
+
+  thumbnail?: any;
+
+  features: string[];
+
+  instructor: string;
+
+  teacher?: {
+    _id?: string;
+    name?: string;
+    designation?: string;
+    experience?: string;
+    photo?: any;
+  };
+}
 export interface Video {
   id: string;
   title: string;
