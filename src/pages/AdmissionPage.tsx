@@ -1,18 +1,42 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
-import { CheckCircle2, Send, MapPin, Phone, Mail, Clock, ShieldCheck, Sparkles, MessageCircle, Copy, Check, QrCode, Landmark, Wallet, ScanLine, ArrowLeft } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import {
+  CheckCircle2,
+  Send,
+  MapPin,
+  Phone,
+  Clock,
+  ShieldCheck,
+  Sparkles,
+  MessageCircle,
+  Copy,
+  Check,
+  ArrowLeft,
+  AlertTriangle,
+} from 'lucide-react';
 import { fetchCoursesFromSanity } from '../lib/sanity/queries';
 import { Course } from '../types';
 import qrImage from '../assets/qr.png';
 
 type Step = 'form' | 'payment' | 'success';
 
+const REGISTRATION_FEE = 2500;
+const UPI_ID = '6364240496@ybl';
+const UPI_NAME = '6364240496 (R.K. Yadav Sir)';
+const BANK_NAME = 'State Bank of India (SBI)';
+const BANK_ACCOUNT = '38291048291';
+const BANK_IFSC = 'SBIN0000088';
+const BANK_HOLDER = 'English Platform Hazaribagh';
+const WHATSAPP_NUMBER = '916364240496';
+
 export const AdmissionPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const prefilledCourse = searchParams.get('course') || '';
 
-  const [courses, setCourses] = useState<Course[]>([]);
   const [step, setStep] = useState<Step>('form');
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [copied, setCopied] = useState<'upi' | 'number' | 'account' | null>(null);
+
   const [formData, setFormData] = useState({
     fullName: '',
     phone: '',
@@ -21,49 +45,58 @@ export const AdmissionPage: React.FC = () => {
     batchTiming: 'Morning (07:00 AM - 08:30 AM)',
     mode: 'Offline Campus',
     schoolName: '',
-    address: ''
+    address: '',
   });
 
-  const [paymentMethod, setPaymentMethod] = useState('Direct Bank Transfer (SBI Account)');
+  const [paymentMethod, setPaymentMethod] = useState('Online UPI (PhonePe / Google Pay / Paytm)');
   const [transactionId, setTransactionId] = useState('');
-  const [copiedField, setCopiedField] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchCoursesFromSanity().then((fetched) => {
-      if (fetched && fetched.length > 0) {
-        setCourses(fetched);
-        if (!prefilledCourse) {
-          setFormData((prev) => ({ ...prev, targetClass: fetched[0].title }));
-        }
-      }
-    }).catch(console.error);
-  }, [prefilledCourse]);
-
   const [submittedAppId, setSubmittedAppId] = useState<string | null>(null);
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    fetchCoursesFromSanity()
+      .then((fetched) => {
+        if (fetched && fetched.length > 0) {
+          setCourses(fetched);
+          if (!prefilledCourse) {
+            setFormData((prev) => ({ ...prev, targetClass: fetched[0].title }));
+          }
+        }
+      })
+      .catch(console.error);
+  }, [prefilledCourse]);
+
+  // Step 1: Form -> Payment
+  const handleContinueToPayment = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.fullName || !formData.phone) {
       alert('Please fill in your Full Name and Phone Number.');
       return;
     }
+    setStep('payment');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Step 2: Payment -> Success
+  const handleConfirmPayment = (e: React.FormEvent) => {
+    e.preventDefault();
+    const isCash = paymentMethod === 'Pay Cash at Institute Counter';
+    if (!isCash && !transactionId.trim()) {
+      alert('Please enter your Payment Transaction ID / UTR No. after making the payment.');
+      return;
+    }
     const appId = 'EPH-2026-' + Math.floor(1000 + Math.random() * 9000);
     setSubmittedAppId(appId);
-    setStep('payment');
-  };
-
-  const handlePaymentContinue = () => {
     setStep('success');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const copyToClipboard = (text: string, field: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopiedField(field);
-      setTimeout(() => setCopiedField(null), 1500);
-    });
+  const handleCopy = (text: string, key: 'upi' | 'number' | 'account') => {
+    navigator.clipboard.writeText(text);
+    setCopied(key);
+    setTimeout(() => setCopied(null), 1500);
   };
 
-  // Builds a complete, formatted WhatsApp message with every field (admission + payment)
+  // Builds a complete, formatted WhatsApp message with every field + payment details
   const buildWhatsAppMessage = (appId: string) => {
     const lines = [
       `Hi, I submitted the online admission form on the website. Please confirm my demo class timing.`,
@@ -78,16 +111,16 @@ export const AdmissionPage: React.FC = () => {
       `*School/College Name:* ${formData.schoolName ? formData.schoolName : 'Not provided'}`,
       ``,
       `*Payment Method:* ${paymentMethod}`,
-      `*Transaction ID / UTR:* ${transactionId ? transactionId : 'Not provided (Cash / To be shared)'}`,
+      `*Amount:* ₹${REGISTRATION_FEE}/-`,
+      `*Transaction ID / UTR:* ${transactionId ? transactionId : 'N/A (Cash Payment)'}`,
       ``,
-      `I am also sharing my payment screenshot here for confirmation.`,
+      `*I am attaching my payment screenshot along with this message.*`,
     ];
     return lines.join('\n');
   };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 py-12 px-4 sm:px-6 lg:px-8 space-y-12">
-
       {/* Header */}
       <div className="max-w-4xl mx-auto text-center space-y-3">
         <div className="inline-flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-700 px-3.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
@@ -100,16 +133,29 @@ export const AdmissionPage: React.FC = () => {
         <p className="text-slate-600 text-sm sm:text-base max-w-2xl mx-auto">
           Reserve your seat for 3 days free demo classes. No upfront payment required to apply!
         </p>
+
+        {/* Step indicator */}
+        <div className="flex items-center justify-center gap-2 pt-2 text-xs font-bold">
+          <span className={`px-3 py-1 rounded-full ${step === 'form' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-700 border border-blue-200'}`}>
+            1. Details
+          </span>
+          <span className="text-slate-300">—</span>
+          <span className={`px-3 py-1 rounded-full ${step === 'payment' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-700 border border-blue-200'}`}>
+            2. Payment
+          </span>
+          <span className="text-slate-300">—</span>
+          <span className={`px-3 py-1 rounded-full ${step === 'success' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-700 border border-blue-200'}`}>
+            3. Confirm
+          </span>
+        </div>
       </div>
 
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-
         {/* Left Side: Form / Payment / Success */}
-        <div className={`lg:col-span-7 rounded-2xl shadow-xs ${step === 'payment' ? 'bg-[#0b1220] border border-[#1e2a3d] p-6 sm:p-8' : 'bg-white border border-slate-200 p-6 sm:p-8'}`}>
-
+        <div className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-xs">
           {/* STEP 1: FORM */}
           {step === 'form' && (
-            <form onSubmit={handleFormSubmit} className="space-y-5">
+            <form onSubmit={handleContinueToPayment} className="space-y-5">
               <h2 className="text-xl font-bold text-slate-900 border-b border-slate-200 pb-3 flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-blue-600" />
                 <span>Student Admission Registration Form</span>
@@ -247,141 +293,170 @@ export const AdmissionPage: React.FC = () => {
 
           {/* STEP 2: PAYMENT */}
           {step === 'payment' && (
-            <div className="space-y-6 text-slate-200">
-              <button
-                onClick={() => setStep('form')}
-                className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-yellow-400 transition-colors"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Back to form</span>
-              </button>
+            <form onSubmit={handleConfirmPayment} className="space-y-5">
+              <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-blue-600" />
+                  <span>Registration Fee Payment</span>
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setStep('form')}
+                  className="text-xs font-semibold text-slate-500 hover:text-blue-600 flex items-center gap-1"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  Edit Details
+                </button>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-center justify-between">
+                <span className="text-xs font-bold text-blue-700 uppercase tracking-wider">
+                  Demo Class Registration Fee
+                </span>
+                <span className="text-lg font-black text-blue-700">₹{REGISTRATION_FEE}/-</span>
+              </div>
 
               <div>
-                <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                  <Wallet className="w-5 h-5 text-yellow-400" />
-                  <span>Complete Your Admission Payment</span>
-                </h2>
-                <p className="text-xs text-slate-400 mt-1">
-                  Application ID <span className="text-yellow-400 font-mono font-bold">{submittedAppId}</span> generated for <strong className="text-white">{formData.fullName}</strong>.
-                </p>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Select Payment Method *
+                </label>
+                <select
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 focus:border-blue-600 rounded-xl px-4 py-3 text-sm text-slate-900 focus:outline-none"
+                >
+                  <option value="Online UPI (PhonePe / Google Pay / Paytm)">Online UPI (PhonePe / Google Pay / Paytm)</option>
+                  <option value="QR Code Scanner (Instant Scan)">QR Code Scanner (Instant Scan)</option>
+                  <option value="Direct Bank Transfer (SBI Account)">Direct Bank Transfer (SBI Account)</option>
+                  <option value="Pay Cash at Institute Counter">Pay Cash at Institute Counter</option>
+                </select>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-yellow-400 uppercase tracking-wider mb-1.5">
-                    Select Payment Method *
-                  </label>
-                  <select
-                    value={paymentMethod}
-                    onChange={(e) => setPaymentMethod(e.target.value)}
-                    className="w-full bg-[#0f1826] border border-yellow-500/60 focus:border-yellow-400 rounded-xl px-4 py-3 text-sm text-yellow-300 font-semibold focus:outline-none"
-                  >
-                    <option value="Online UPI (PhonePe / Google Pay / Paytm)">Online UPI (PhonePe / Google Pay / Paytm)</option>
-                    <option value="QR Code Scanner (Instant Scan)">QR Code Scanner (Instant Scan)</option>
-                    <option value="Direct Bank Transfer (SBI Account)">Direct Bank Transfer (SBI Account)</option>
-                    <option value="Pay Cash at Institute Counter">Pay Cash at Institute Counter</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                    Enter Payment Transaction ID / UTR No. <span className="text-slate-500 normal-case font-normal">(If paid online)</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={transactionId}
-                    onChange={(e) => setTransactionId(e.target.value)}
-                    placeholder="e.g. 420918239012 or PhonePe Ref No."
-                    className="w-full bg-[#0f1826] border border-slate-700 focus:border-yellow-400 rounded-xl px-4 py-3 text-sm text-slate-200 placeholder-slate-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              {/* Payment details panel - changes based on method */}
-              {(paymentMethod === 'Online UPI (PhonePe / Google Pay / Paytm)' || paymentMethod === 'QR Code Scanner (Instant Scan)') && (
-                <div className="bg-[#0f1826] border border-yellow-500/40 rounded-2xl p-5 space-y-4">
-                  <div className="flex flex-col sm:flex-row items-center gap-5">
-                    <div className="bg-white p-2 rounded-xl shrink-0">
-                      <img src={qrImage} alt="Scan to Pay QR" className="w-32 h-32 object-contain" />
+              {/* Dynamic panel per method */}
+              {(paymentMethod === 'Online UPI (PhonePe / Google Pay / Paytm)' ||
+                paymentMethod === 'QR Code Scanner (Instant Scan)') && (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4">
+                  {paymentMethod === 'QR Code Scanner (Instant Scan)' && (
+                    <div className="flex flex-col items-center gap-2">
+                      <img
+                        src={qrImage}
+                        alt="Scan to Pay QR Code"
+                        className="w-40 h-40 rounded-lg border border-slate-300 bg-white p-2"
+                      />
+                      <span className="text-xs font-bold text-blue-700">Scan to Pay ₹{REGISTRATION_FEE}/-</span>
                     </div>
-                    <div className="flex-1 w-full space-y-3">
-                      <div className="flex items-center justify-between bg-[#0b1220] border border-slate-700 rounded-xl px-4 py-2.5">
-                        <div>
-                          <p className="text-[10px] text-slate-400 uppercase tracking-wider">UPI ID</p>
-                          <p className="text-sm font-bold text-yellow-300">6364240496@ybl</p>
-                        </div>
-                        <button
-                          onClick={() => copyToClipboard('6364240496@ybl', 'upi')}
-                          className="flex items-center gap-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg"
-                        >
-                          {copiedField === 'upi' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{copiedField === 'upi' ? 'Copied' : 'Copy UPI ID'}</span>
-                        </button>
-                      </div>
-                      <div className="flex items-center justify-between bg-[#0b1220] border border-slate-700 rounded-xl px-4 py-2.5">
-                        <div>
-                          <p className="text-[10px] text-slate-400 uppercase tracking-wider">PhonePe / GPay / Paytm</p>
-                          <p className="text-sm font-bold text-white">6364240496 <span className="text-slate-400 font-normal">(R.K. Yadav Sir)</span></p>
-                        </div>
-                        <button
-                          onClick={() => copyToClipboard('6364240496', 'phone')}
-                          className="flex items-center gap-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg"
-                        >
-                          {copiedField === 'phone' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{copiedField === 'phone' ? 'Copied' : 'Copy Number'}</span>
-                        </button>
-                      </div>
+                  )}
+
+                  <div className="flex items-center justify-between bg-white border border-slate-200 rounded-lg px-3 py-2.5">
+                    <div>
+                      <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">UPI ID</div>
+                      <div className="text-sm font-bold text-slate-900">{UPI_ID}</div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(UPI_ID, 'upi')}
+                      className="flex items-center gap-1 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-1.5 rounded-lg hover:bg-blue-100"
+                    >
+                      {copied === 'upi' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copied === 'upi' ? 'Copied' : 'Copy UPI ID'}
+                    </button>
                   </div>
-                  <p className="text-center text-yellow-400 font-bold text-sm">Scan to Pay ₹2500/-</p>
-                  <p className="flex items-start gap-1.5 text-[11px] text-slate-400">
-                    <span>⚡</span>
-                    <span>After paying on PhonePe, Google Pay, or Paytm, enter the 12-digit UTR / Transaction ID above for instant fee receipt generation.</span>
-                  </p>
+
+                  <div className="flex items-center justify-between bg-white border border-slate-200 rounded-lg px-3 py-2.5">
+                    <div>
+                      <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">PhonePe / GPay / Paytm</div>
+                      <div className="text-sm font-bold text-slate-900">{UPI_NAME}</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy('6364240496', 'number')}
+                      className="flex items-center gap-1 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-1.5 rounded-lg hover:bg-blue-100"
+                    >
+                      {copied === 'number' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copied === 'number' ? 'Copied' : 'Copy Number'}
+                    </button>
+                  </div>
                 </div>
               )}
 
               {paymentMethod === 'Direct Bank Transfer (SBI Account)' && (
-                <div className="bg-[#0f1826] border border-yellow-500/40 rounded-2xl p-5 space-y-2.5">
-                  <div className="flex items-center gap-2 text-yellow-400 font-bold text-sm">
-                    <Landmark className="w-4 h-4" />
-                    <span>Bank Transfer Details (SBI Hazaribagh Branch):</span>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2.5 text-sm">
+                  <div className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-1">
+                    Bank Transfer Details (SBI Hazaribagh Branch)
                   </div>
-                  <p className="text-sm text-slate-200"><span className="text-slate-400">Bank Name:</span> <strong>State Bank of India (SBI)</strong></p>
-                  <p className="text-sm text-slate-200"><span className="text-slate-400">Account Number:</span> <strong>38291048291</strong></p>
-                  <p className="text-sm text-slate-200"><span className="text-slate-400">IFSC Code:</span> <strong className="font-mono">SBIN0000088</strong></p>
-                  <p className="text-sm text-slate-200"><span className="text-slate-400">Account Holder:</span> <strong>English Platform Hazaribagh</strong></p>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Bank Name:</span>
+                    <span className="font-bold text-slate-900">{BANK_NAME}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Account Number:</span>
+                    <span className="font-bold text-slate-900 flex items-center gap-2">
+                      {BANK_ACCOUNT}
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(BANK_ACCOUNT, 'account')}
+                        className="text-blue-700"
+                      >
+                        {copied === 'account' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">IFSC Code:</span>
+                    <span className="font-bold text-slate-900">{BANK_IFSC}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Account Holder:</span>
+                    <span className="font-bold text-slate-900">{BANK_HOLDER}</span>
+                  </div>
                 </div>
               )}
 
               {paymentMethod === 'Pay Cash at Institute Counter' && (
-                <div className="bg-[#0f1826] border border-yellow-500/40 rounded-2xl p-5 space-y-2 flex items-start gap-3">
-                  <ScanLine className="w-5 h-5 text-yellow-400 shrink-0 mt-0.5" />
-                  <p className="text-sm text-slate-200">
-                    Please visit <strong>Ananda Chowk, Hazaribagh</strong> campus and pay the admission fee in cash at the counter. Show your Application ID <strong className="text-yellow-300">{submittedAppId}</strong> at reception to get your receipt.
-                  </p>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-700">
+                  You can pay <strong>₹{REGISTRATION_FEE}/-</strong> in cash directly at the reception desk,
+                  Ananda Chowk campus, at the time of your demo class. No online transaction ID needed —
+                  just submit this form to confirm your seat.
                 </div>
               )}
 
-              {/* Highlighted note about WhatsApp screenshot */}
-              <div className="bg-yellow-400/10 border border-yellow-400/50 rounded-xl px-4 py-3">
-                <p className="text-xs sm:text-sm text-yellow-300 font-semibold flex items-start gap-2">
-                  <MessageCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>Note: After payment, please take a screenshot of the payment confirmation and share it on WhatsApp along with your Application ID for instant seat confirmation.</span>
+              {paymentMethod !== 'Pay Cash at Institute Counter' && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Enter Payment Transaction ID / UTR No. *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={transactionId}
+                    onChange={(e) => setTransactionId(e.target.value)}
+                    placeholder="e.g. 420918239012 or PhonePe Ref No."
+                    className="w-full bg-slate-50 border border-slate-300 focus:border-blue-600 rounded-xl px-4 py-3 text-sm text-slate-900 focus:outline-none"
+                  />
+                </div>
+              )}
+
+              {/* Highlighted note */}
+              <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-xs sm:text-sm font-bold text-amber-800">
+                  Payment karne ke baad uska screenshot zaroor WhatsApp par share karein — tabhi aapki
+                  seat confirm hogi. Neeche button dabate hi aapki saari details WhatsApp par chali jayengi,
+                  bas screenshot attach karke bhej dein.
                 </p>
               </div>
 
               <button
-                onClick={handlePaymentContinue}
-                className="w-full bg-yellow-500 hover:bg-yellow-400 text-slate-900 font-black py-4 rounded-xl text-sm shadow-md flex items-center justify-center gap-2 transition-all hover:scale-[1.01]"
+                type="submit"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl text-sm shadow-md flex items-center justify-center gap-2 transition-all hover:scale-[1.01]"
               >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>Continue</span>
+                <Send className="w-4 h-4" />
+                <span>Confirm Payment & Continue</span>
               </button>
-            </div>
+            </form>
           )}
 
-          {/* STEP 3: SUCCESS / WHATSAPP */}
+          {/* STEP 3: SUCCESS */}
           {step === 'success' && submittedAppId && (
             <div className="space-y-6 text-center animate-in zoom-in-95 duration-200">
               <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center justify-center mx-auto">
@@ -394,39 +469,55 @@ export const AdmissionPage: React.FC = () => {
                 </span>
                 <h2 className="text-2xl font-black text-slate-900">Application Received!</h2>
                 <p className="text-slate-600 text-xs sm:text-sm">
-                  Dear <strong className="text-slate-900">{formData.fullName}</strong>, your seat for 3 days free demo classes in <strong className="text-blue-600">{formData.targetClass}</strong> has been provisionally reserved.
+                  Dear <strong className="text-slate-900">{formData.fullName}</strong>, your seat for 3 days
+                  free demo classes in <strong className="text-blue-600">{formData.targetClass}</strong> has
+                  been provisionally reserved.
                 </p>
               </div>
 
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-left text-xs space-y-2 text-slate-700">
-                <div className="font-bold text-blue-600 border-b border-slate-200 pb-2">Next Steps:</div>
-                <p>1. Please visit campus at <strong>Ananda Chowk, Hazaribagh</strong> during your chosen batch time ({formData.batchTiming}).</p>
-                <p>2. Show your Application ID <strong>{submittedAppId}</strong> at the reception desk to receive your demo pass & handwritten workbook.</p>
-                <p>3. Don't forget to share your payment screenshot on WhatsApp for instant confirmation.</p>
+              <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 text-left text-xs sm:text-sm font-bold text-amber-800 flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <span>
+                  Zaroori: Payment ka screenshot neeche WhatsApp button dabakar zaroor bhej dein.
+                  Screenshot ke bina seat final confirm nahi hogi.
+                </span>
               </div>
 
-              <div className="bg-yellow-50 border border-yellow-300 rounded-xl px-4 py-3 text-left">
-                <p className="text-xs sm:text-sm text-yellow-800 font-semibold flex items-start gap-2">
-                  <MessageCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>Reminder: Please attach your payment screenshot on WhatsApp in the chat below for instant seat confirmation.</span>
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-left text-xs space-y-2 text-slate-700">
+                <div className="font-bold text-blue-600 border-b border-slate-200 pb-2">Next Steps for Demo Class:</div>
+                <p>1. Click the WhatsApp button below — your full details will be pre-filled automatically.</p>
+                <p>2. Attach your payment screenshot in the same WhatsApp chat and hit send.</p>
+                <p>
+                  3. Visit campus at <strong>Ananda Chowk, Hazaribagh</strong> during your chosen batch time (
+                  {formData.batchTiming}) and show Application ID <strong>{submittedAppId}</strong> at reception.
                 </p>
               </div>
 
               <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
                 
-                <a  href={`https://wa.me/916364240496?text=${encodeURIComponent(buildWhatsAppMessage(submittedAppId))}`}
+                <a  href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(buildWhatsAppMessage(submittedAppId))}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm"
                 >
                   <MessageCircle className="w-4 h-4 fill-white" />
-                  <span>Send Details & Confirm on WhatsApp</span>
+                  <span>Send Details & Screenshot on WhatsApp</span>
                 </a>
                 <button
                   onClick={() => {
                     setStep('form');
                     setSubmittedAppId(null);
                     setTransactionId('');
+                    setFormData({
+                      fullName: '',
+                      phone: '',
+                      whatsapp: '',
+                      targetClass: courses[0]?.title || 'Class 10 JAC & CBSE English Mastery',
+                      batchTiming: 'Morning (07:00 AM - 08:30 AM)',
+                      mode: 'Offline Campus',
+                      schoolName: '',
+                      address: '',
+                    });
                   }}
                   className="w-full sm:w-auto bg-slate-100 text-slate-700 font-semibold px-5 py-3 rounded-xl text-xs hover:bg-slate-200 border border-slate-200"
                 >
@@ -435,12 +526,10 @@ export const AdmissionPage: React.FC = () => {
               </div>
             </div>
           )}
-
         </div>
 
         {/* Right Side: Campus Info & Map */}
         <div className="lg:col-span-5 space-y-6">
-
           <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-5 shadow-xs">
             <h3 className="font-bold text-slate-900 text-lg border-b border-slate-200 pb-3 flex items-center gap-2">
               <MapPin className="w-5 h-5 text-blue-600" />
@@ -486,11 +575,8 @@ export const AdmissionPage: React.FC = () => {
               ></iframe>
             </div>
           </div>
-
         </div>
-
       </div>
-
     </div>
   );
 };
