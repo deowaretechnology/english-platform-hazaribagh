@@ -12,6 +12,25 @@ interface Question {
   options: string[];
 }
 
+interface TestInfo {
+  title?: string;
+  class?: string;
+  totalQuestions: number;
+  totalMarks: number;
+  marksPerQuestion: number;
+  durationMinutes: number;
+}
+
+// Only used if literally nothing — not Sanity, not the static fallback
+// dataset — has a duration for this test. Kept as a last-resort default,
+// not as the normal path.
+const DEFAULT_DURATION_MINUTES = 30;
+
+function formatMarks(n: number) {
+  if (!Number.isFinite(n)) return '0';
+  return Number.isInteger(n) ? n.toString() : n.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+}
+
 export const TestTakingPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
@@ -21,20 +40,17 @@ export const TestTakingPage: React.FC = () => {
   const testSlug = slug || 'default-test';
 
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [testInfo, setTestInfo] = useState<TestInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [existingAttempt, setExistingAttempt] = useState<any | null>(null);
 
   const [currentIdx, setCurrentIdx] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<string | number, number>>({});
-  const [timeLeft, setTimeLeft] = useState<number>(30 * 60); // 30 mins default
+  const [timeLeft, setTimeLeft] = useState<number>(DEFAULT_DURATION_MINUTES * 60);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Local storage here is ONLY an in-progress answer cache (survives an
-  // accidental refresh mid-test) — it is never treated as the record of
-  // truth for whether a test was attempted or what the score was. That
-  // always comes from the backend.
   const progressKey = `test_progress_${studentId}_${testSlug}`;
 
   useEffect(() => {
@@ -50,7 +66,6 @@ export const TestTakingPage: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      // A. Ask the backend if this student already attempted this test.
       try {
         const checkData = await apiFetch<{ success: boolean; attempted: boolean; attempt?: any }>(
           `/api/tests/${testSlug}/check-attempt/${studentId}`
@@ -64,14 +79,18 @@ export const TestTakingPage: React.FC = () => {
         console.warn('Could not check existing attempt (continuing to load questions):', e);
       }
 
-      // B. Load questions — try backend first, fall back to Sanity client
-      // (both are legitimate content sources, unlike fabricating a score).
       let loadedQuestions: Question[] = [];
+      let loadedTestInfo: TestInfo | null = null;
 
       try {
-        const data = await apiFetch<{ success: boolean; questions: Question[] }>(`/api/tests/${testSlug}/questions`);
+        const data = await apiFetch<{ success: boolean; questions: Question[]; testInfo?: TestInfo }>(
+          `/api/tests/${testSlug}/questions`
+        );
         if (Array.isArray(data.questions) && data.questions.length > 0) {
           loadedQuestions = data.questions;
+        }
+        if (data.testInfo) {
+          loadedTestInfo = data.testInfo;
         }
       } catch (err) {
         console.warn('Backend question API unavailable, falling back to Sanity:', err);
@@ -97,16 +116,34 @@ export const TestTakingPage: React.FC = () => {
         const shuffled = seededShuffle<Question>(loadedQuestions, seed);
         setQuestions(shuffled);
 
+        // If the backend didn't hand us testInfo (e.g. pure-Sanity fallback
+        // path), derive a sensible one from what we actually have — 1 mark
+        // per question, rather than a fixed number.
+        const resolvedTestInfo: TestInfo = loadedTestInfo || {
+          totalQuestions: shuffled.length,
+          totalMarks: shuffled.length,
+          marksPerQuestion: 1,
+          durationMinutes: DEFAULT_DURATION_MINUTES,
+        };
+        setTestInfo(resolvedTestInfo);
+
         const saved = localStorage.getItem(progressKey);
         if (saved) {
           try {
             const parsed = JSON.parse(saved);
             if (parsed.userAnswers) setUserAnswers(parsed.userAnswers);
             if (parsed.currentIdx !== undefined) setCurrentIdx(parsed.currentIdx);
-            if (parsed.timeLeft !== undefined) setTimeLeft(parsed.timeLeft);
+            if (parsed.timeLeft !== undefined) {
+              setTimeLeft(parsed.timeLeft);
+            } else {
+              setTimeLeft(resolvedTestInfo.durationMinutes * 60);
+            }
           } catch (e) {
             console.warn('Failed to parse saved progress:', e);
+            setTimeLeft(resolvedTestInfo.durationMinutes * 60);
           }
+        } else {
+          setTimeLeft(resolvedTestInfo.durationMinutes * 60);
         }
       } else {
         setError('No questions found for this test. Please check back soon.');
@@ -147,7 +184,7 @@ export const TestTakingPage: React.FC = () => {
   const handleSelectOption = (optionIndex: number) => {
     const currentQ = questions[currentIdx];
     if (!currentQ) return;
-    if (userAnswers[currentQ.id] !== undefined) return; // locked
+    if (userAnswers[currentQ.id] !== undefined) return;
 
     const updated = { ...userAnswers, [currentQ.id]: optionIndex };
     setUserAnswers(updated);
@@ -157,9 +194,6 @@ export const TestTakingPage: React.FC = () => {
     );
   };
 
-  // Submission is authoritative on the backend only. If the backend call
-  // fails we show a real error and let the student retry — we never
-  // compute a fake score client-side and pretend it was saved.
   const handleSubmitTest = async () => {
     if (isSubmitting) return;
     setIsSubmitting(true);
@@ -246,7 +280,7 @@ export const TestTakingPage: React.FC = () => {
             <div>
               <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Your Score</div>
               <div className="text-lg sm:text-xl font-black text-blue-600 mt-1">
-                {existingAttempt.score} <span className="text-xs text-slate-400 font-normal">/ 50</span>
+                {existingAttempt.score} <span className="text-xs text-slate-400 font-normal">/ {existingAttempt.totalMarks ?? existingAttempt.totalQuestions}</span>
               </div>
             </div>
             <div className="border-x border-slate-200">
@@ -305,6 +339,7 @@ export const TestTakingPage: React.FC = () => {
   const selectedOptionIdx = userAnswers[currentQ?.id];
   const isAnswerLocked = selectedOptionIdx !== undefined;
   const answeredCount = Object.keys(userAnswers).length;
+  const marksPerQuestion = testInfo?.marksPerQuestion ?? 0;
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col">
@@ -315,7 +350,7 @@ export const TestTakingPage: React.FC = () => {
             JAC / CBSE Board Standard OMR Session
           </span>
           <h1 className="text-base sm:text-lg font-black text-white line-clamp-1">
-            {testSlug.toUpperCase().replace(/-/g, ' ')}
+            {testInfo?.title || testSlug.toUpperCase().replace(/-/g, ' ')}
           </h1>
         </div>
 
@@ -367,7 +402,7 @@ export const TestTakingPage: React.FC = () => {
                   </span>
                 )}
                 <span className="text-xs text-slate-500 font-semibold">
-                  Single Choice (+2.5 Marks)
+                  Single Choice (+{formatMarks(marksPerQuestion)} Marks)
                 </span>
               </div>
             </div>

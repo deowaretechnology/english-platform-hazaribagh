@@ -3,6 +3,7 @@ import { backendSanityClient } from '../lib/sanity/sanity.js';
 import { connectToDatabase } from '../lib/db/mongodb.js';
 import { TestAttempt } from '../lib/db/models.js';
 import { testsData } from '../data/tests.js';
+import { buildMarksBreakdown, computeScore } from '../lib/testMarks.js';
 
 function extractOptions(q: any): string[] {
   if (Array.isArray(q.options) && q.options.length > 0) {
@@ -34,19 +35,16 @@ function extractCorrectIndex(q: any, options: string[]): number {
 
   const strAns = String(rawAns).trim();
 
-  // 1. Direct index string/number '0', '1', '2', '3'
   if (/^[0-3]$/.test(strAns)) {
     return parseInt(strAns, 10);
   }
 
-  // 2. Letter indicators 'A', 'B', 'C', 'D' or 'Option A', 'optionA', etc.
   const upper = strAns.toUpperCase();
   if (upper === 'A' || upper === 'OPTION A' || upper === 'OPTIONA') return 0;
   if (upper === 'B' || upper === 'OPTION B' || upper === 'OPTIONB') return 1;
   if (upper === 'C' || upper === 'OPTION C' || upper === 'OPTIONC') return 2;
   if (upper === 'D' || upper === 'OPTION D' || upper === 'OPTIOND') return 3;
 
-  // 3. Exact string match in options array
   if (options && options.length > 0) {
     const idx = options.findIndex(opt => opt.trim().toLowerCase() === strAns.toLowerCase());
     if (idx !== -1) return idx;
@@ -55,87 +53,103 @@ function extractCorrectIndex(q: any, options: string[]): number {
   return 0;
 }
 
+// Single query used by both endpoints so title/classLevel/marks/duration
+// and inline questions are always read from the same place.
+const TEST_DOC_QUERY = `*[_type in ["test", "tests", "mockTest"] && (slug.current == $slug || _id == $slug)][0] {
+  _id,
+  title,
+  classLevel,
+  marks,
+  durationMinutes,
+  questions[] {
+    _key,
+    _id,
+    questionText,
+    question,
+    options,
+    optionA,
+    optionB,
+    optionC,
+    optionD,
+    correctAnswer,
+    correctOption,
+    explanation
+  }
+}`;
+
+const STANDALONE_QUESTIONS_QUERY = `*[_type == "question" && (testRef->slug.current == $slug || testRef->_id == $slug || classLevel == $slug || testSlug == $slug)] {
+  _id,
+  questionText,
+  question,
+  options,
+  optionA,
+  optionB,
+  optionC,
+  optionD,
+  correctAnswer,
+  correctOption,
+  explanation
+}`;
+
 export async function handleGetTestQuestions(req: Request, res: Response) {
   const { slug } = req.params;
+  const matchedTest = testsData.find(t => t.id === slug) || testsData[0];
+
+  let testDoc: any = null;
+  let rawQuestions: any[] = [];
 
   try {
-    // 1. Check if test document has inline questions
-    const testDocQuery = `*[_type in ["test", "tests", "mockTest"] && (slug.current == $slug || _id == $slug)][0] {
-      _id,
-      title,
-      classLevel,
-      questions[] {
-        _key,
-        _id,
-        questionText,
-        question,
-        options,
-        optionA,
-        optionB,
-        optionC,
-        optionD,
-        correctAnswer,
-        correctOption,
-        explanation
-      }
-    }`;
-    const testDoc = await backendSanityClient.fetch(testDocQuery, { slug });
+    testDoc = await backendSanityClient.fetch(TEST_DOC_QUERY, { slug });
 
     if (testDoc && Array.isArray(testDoc.questions) && testDoc.questions.length > 0) {
-      const sanitized = testDoc.questions.map((q: any, idx: number) => ({
-        id: q._id || q._key || `q-${idx}`,
-        questionText: q.questionText || q.question || `Question ${idx + 1}`,
-        options: extractOptions(q)
-      }));
-      return res.json({
-        success: true,
-        questions: sanitized,
-        testInfo: {
-          title: testDoc.title || slug.toUpperCase().replace(/-/g, ' '),
-          class: testDoc.classLevel || '10'
-        }
-      });
-    }
-
-    // 2. Fetch standalone question documents
-    const query = `*[_type == "question" && (testRef->slug.current == $slug || testRef->_id == $slug || classLevel == $slug || testSlug == $slug)] {
-      _id,
-      questionText,
-      question,
-      options,
-      optionA,
-      optionB,
-      optionC,
-      optionD,
-      correctAnswer,
-      correctOption,
-      explanation
-    }`;
-    const rawQuestions: any[] = await backendSanityClient.fetch(query, { slug });
-
-    if (rawQuestions && rawQuestions.length > 0) {
-      const sanitized = rawQuestions.map((q, idx) => ({
-        id: q._id || `q-${idx}`,
-        questionText: q.questionText || q.question || `Question ${idx + 1}`,
-        options: extractOptions(q)
-      }));
-      return res.json({ success: true, questions: sanitized });
+      rawQuestions = testDoc.questions;
+    } else {
+      const standalone: any[] = await backendSanityClient.fetch(STANDALONE_QUESTIONS_QUERY, { slug });
+      if (standalone && standalone.length > 0) {
+        rawQuestions = standalone;
+      }
     }
   } catch (err) {
     console.warn('Error fetching questions from Sanity:', err);
   }
 
-  // Fallback to static test data if Sanity has no questions yet
-  const matchedTest = testsData.find(t => t.id === slug) || testsData[0];
-  const questions = matchedTest ? matchedTest.questions || [] : [];
+  let sanitized: { id: string; questionText: string; options: string[] }[];
 
-  const sanitizedFallback = questions.map(q => ({
-    id: q.id,
-    questionText: q.question,
-    options: q.options
-  }));
+  if (rawQuestions.length > 0) {
+    sanitized = rawQuestions.map((q: any, idx: number) => ({
+      id: q._id || q._key || `q-${idx}`,
+      questionText: q.questionText || q.question || `Question ${idx + 1}`,
+      options: extractOptions(q)
+    }));
+  } else {
+    // Fallback to static test data if Sanity has no questions yet
+    const fallbackQs = matchedTest ? matchedTest.questions || [] : [];
+    sanitized = fallbackQs.map((q: any) => ({
+      id: q.id,
+      questionText: q.question,
+      options: q.options
+    }));
+  }
 
-  return res.json({ success: true, questions: sanitizedFallback, testInfo: matchedTest });
+  const totalQuestions = sanitized.length;
+  const { totalMarks, marksPerQuestion } = buildMarksBreakdown(
+    testDoc?.marks,
+    matchedTest?.marks,
+    totalQuestions
+  );
+
+  return res.json({
+    success: true,
+    questions: sanitized,
+    testInfo: {
+      title: testDoc?.title || matchedTest?.title || slug.toUpperCase().replace(/-/g, ' '),
+      class: testDoc?.classLevel || matchedTest?.class || '10',
+      totalQuestions,
+      totalMarks,
+      marksPerQuestion,
+      durationMinutes: testDoc?.durationMinutes || matchedTest?.durationMinutes || 30
+    }
+  });
 }
 
 export async function handleEvaluateTest(req: Request, res: Response) {
@@ -145,57 +159,26 @@ export async function handleEvaluateTest(req: Request, res: Response) {
     return res.status(400).json({ error: 'Missing user answers' });
   }
 
-  let realQuestions: any[] = [];
   const matchedTest = testsData.find(t => t.id === slug) || testsData[0];
   let testTitle = matchedTest ? matchedTest.title : slug.toUpperCase().replace(/-/g, ' ');
   let classLevel = matchedTest ? matchedTest.class : '10';
+  let sanityMarks: number | undefined;
+
+  let realQuestions: any[] = [];
 
   try {
-    // 1. Check test doc with inline questions first
-    const testDocQuery = `*[_type in ["test", "tests", "mockTest"] && (slug.current == $slug || _id == $slug)][0] {
-      _id,
-      title,
-      classLevel,
-      questions[] {
-        _key,
-        _id,
-        questionText,
-        question,
-        options,
-        optionA,
-        optionB,
-        optionC,
-        optionD,
-        correctAnswer,
-        correctOption,
-        explanation
-      }
-    }`;
-    const testDoc = await backendSanityClient.fetch(testDocQuery, { slug });
+    const testDoc: any = await backendSanityClient.fetch(TEST_DOC_QUERY, { slug });
     if (testDoc) {
       if (testDoc.title) testTitle = testDoc.title;
       if (testDoc.classLevel) classLevel = testDoc.classLevel;
+      if (typeof testDoc.marks === 'number') sanityMarks = testDoc.marks;
       if (Array.isArray(testDoc.questions) && testDoc.questions.length > 0) {
         realQuestions = testDoc.questions;
       }
     }
 
-    // 2. Fallback to standalone question documents
     if (realQuestions.length === 0) {
-      const query = `*[_type == "question" && (testRef->slug.current == $slug || testRef->_id == $slug || classLevel == $slug || testSlug == $slug)] {
-        _id,
-        questionText,
-        question,
-        options,
-        optionA,
-        optionB,
-        optionC,
-        optionD,
-        correctAnswer,
-        correctOption,
-        explanation
-      }`;
-      const fetched = await backendSanityClient.fetch(query, { slug });
+      const fetched: any[] = await backendSanityClient.fetch(STANDALONE_QUESTIONS_QUERY, { slug });
       if (fetched && fetched.length > 0) {
         realQuestions = fetched;
       }
@@ -285,7 +268,13 @@ export async function handleEvaluateTest(req: Request, res: Response) {
     });
   }
 
-  const score = Math.round((correctCount / (totalQuestions || 1)) * 50);
+  // ---- Dynamic marks calculation (the whole point of this refactor) ----
+  const { totalMarks, marksPerQuestion } = buildMarksBreakdown(
+    sanityMarks,
+    matchedTest?.marks,
+    totalQuestions
+  );
+  const score = computeScore(correctCount, marksPerQuestion);
   const percentage = Math.round((correctCount / (totalQuestions || 1)) * 100) || 0;
   const percentile = Math.min(99, Math.round(percentage + 7.5));
 
@@ -298,8 +287,11 @@ export async function handleEvaluateTest(req: Request, res: Response) {
         testSlug: slug,
         testTitle: testTitle,
         classLevel: classLevel,
-        score: score,
-        totalQuestions: totalQuestions,
+        score,
+        totalMarks,
+        marksPerQuestion,
+        correctCount,
+        totalQuestions,
         accuracyPercent: percentage,
         questions: snapshotQuestions,
         submittedAt: new Date()
@@ -316,7 +308,8 @@ export async function handleEvaluateTest(req: Request, res: Response) {
     correctCount,
     totalQuestions,
     score,
-    totalMarks: (matchedTest && matchedTest.marks) || 50,
+    totalMarks,
+    marksPerQuestion,
     percentage,
     percentile,
     breakdown
@@ -348,6 +341,8 @@ export async function handleCheckTestAttempt(req: Request, res: Response) {
             testTitle: attempt.testTitle,
             classLevel: attempt.classLevel,
             score: attempt.score,
+            totalMarks: attempt.totalMarks,
+            marksPerQuestion: attempt.marksPerQuestion,
             totalQuestions: attempt.totalQuestions,
             accuracyPercent: attempt.accuracyPercent,
             submittedAt: attempt.submittedAt

@@ -32,6 +32,8 @@ interface DBTestAttempt {
   testTitle: string;
   classLevel: string;
   score: number;
+  totalMarks: number;
+  marksPerQuestion: number;
   totalQuestions: number;
   accuracyPercent: number;
   questions: QuestionSnapshot[];
@@ -241,7 +243,7 @@ export const ProfilePage: React.FC = () => {
 
                       <div className="flex items-center justify-between text-xs pt-1">
                         <div>
-                          Score: <strong className="text-blue-600 font-bold text-sm">{att.score}</strong> / 50 ({att.accuracyPercent}%)
+                          Score: <strong className="text-blue-600 font-bold text-sm">{att.score}</strong> / {att.totalMarks ?? att.totalQuestions} ({att.accuracyPercent}%)
                         </div>
                         <button
                           onClick={() => setSelectedAttempt(att)}
@@ -286,7 +288,7 @@ export const ProfilePage: React.FC = () => {
               <div>
                 <h3 className="text-lg font-black text-white">{selectedAttempt.testTitle}</h3>
                 <p className="text-xs text-slate-400">
-                  Score: {selectedAttempt.score}/50 • Accuracy: {selectedAttempt.accuracyPercent}% • Class {selectedAttempt.classLevel}
+                  Score: {selectedAttempt.score}/{selectedAttempt.totalMarks ?? selectedAttempt.totalQuestions} • Accuracy: {selectedAttempt.accuracyPercent}% • Class {selectedAttempt.classLevel}
                 </p>
               </div>
               <button

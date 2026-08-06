@@ -85,6 +85,8 @@ export interface Test {
   type: 'Weekly OMR' | 'Monthly Grand' | 'Board Mock';
   totalQuestions: number;
   marks: number;
+  // marks / totalQuestions, always computed — never a fixed number like 2.5
+  marksPerQuestion: number;
   durationMinutes: number;
   date: string;
   status: 'Upcoming' | 'Active' | 'Completed';

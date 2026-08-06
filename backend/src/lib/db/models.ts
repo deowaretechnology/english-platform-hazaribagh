@@ -85,6 +85,12 @@ export interface ITestAttempt {
   testTitle: string;
   classLevel: string;
   score: number;
+  // Total marks the test was out of, and marks awarded per correct
+  // question (totalMarks / totalQuestions). Both are computed dynamically
+  // per test — never hardcoded — and stored so historical attempts keep
+  // their original test's mark scheme even if the test is edited later.
+  totalMarks: number;
+  marksPerQuestion: number;
   totalQuestions: number;
   accuracyPercent: number;
   questions: ITestAttemptQuestion[];
@@ -119,6 +125,14 @@ const TestAttemptSchema = new Schema<ITestAttempt>(
       default: "10",
     },
     score: {
+      type: Number,
+      required: true,
+    },
+    totalMarks: {
+      type: Number,
+      required: true,
+    },
+    marksPerQuestion: {
       type: Number,
       required: true,
     },

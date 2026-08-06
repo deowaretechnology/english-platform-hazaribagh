@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Award, CheckCircle2, XCircle, ArrowLeft, RefreshCw, BarChart2, BookOpen, AlertCircle } from 'lucide-react';
+import { Award, CheckCircle2, XCircle, ArrowLeft, BarChart2, AlertCircle } from 'lucide-react';
 
 interface QuestionBreakdown {
   questionId: string | number;
@@ -16,9 +16,15 @@ interface TestResult {
   totalQuestions: number;
   score: number;
   totalMarks: number;
+  marksPerQuestion: number;
   percentage: number;
   percentile: number;
   breakdown: QuestionBreakdown[];
+}
+
+function formatMarks(n: number | undefined) {
+  if (n === undefined || !Number.isFinite(n)) return '0';
+  return Number.isInteger(n) ? n.toString() : n.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
 }
 
 export const TestResultPage: React.FC = () => {
@@ -57,9 +63,11 @@ export const TestResultPage: React.FC = () => {
     );
   }
 
+  const marksPerQuestionLabel = formatMarks(result.marksPerQuestion);
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 py-12 px-4 sm:px-6 lg:px-8 space-y-10">
-      
+
       {/* Header Banner */}
       <div className="max-w-4xl mx-auto text-center space-y-3">
         <div className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 px-3.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
@@ -77,13 +85,13 @@ export const TestResultPage: React.FC = () => {
       {/* Score Stats Summary Card */}
       <div className="max-w-4xl mx-auto bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-md space-y-6">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 text-center divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
-          
+
           <div className="pt-2 sm:pt-0 space-y-1">
             <div className="text-xs font-bold text-slate-500 uppercase">Score</div>
             <div className="text-3xl sm:text-4xl font-black text-blue-600">
               {result.score} <span className="text-sm text-slate-400 font-normal">/ {result.totalMarks}</span>
             </div>
-            <div className="text-[10px] text-slate-400">Total Marks</div>
+            <div className="text-[10px] text-slate-400">{marksPerQuestionLabel} Marks / Question</div>
           </div>
 
           <div className="pt-2 sm:pt-0 sm:pl-4 space-y-1">
@@ -156,7 +164,7 @@ export const TestResultPage: React.FC = () => {
                     q.isCorrect ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
                   }`}>
                     {q.isCorrect ? <CheckCircle2 className="w-3 h-3 text-emerald-600" /> : <XCircle className="w-3 h-3 text-rose-600" />}
-                    {q.isCorrect ? 'Correct (+2.5)' : 'Incorrect (0)'}
+                    {q.isCorrect ? `Correct (+${marksPerQuestionLabel})` : 'Incorrect (0)'}
                   </span>
                 </div>
               </div>

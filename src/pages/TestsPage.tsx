@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Clock, HelpCircle, Play, CheckCircle, Lock } from 'lucide-react';
+import { Clock, HelpCircle, Play, CheckCircle, Lock, Award } from 'lucide-react';
 import { fetchTestsFromSanity } from '../lib/sanity/queries';
 import { apiFetch } from '../lib/api';
 import { ClassFilter } from '../components/ui/ClassFilter';
@@ -39,9 +39,6 @@ export const TestsPage: React.FC = () => {
     loadData();
   }, []);
 
-  // Fetch the user's attempts from the backend (source of truth) so we know
-  // which tests to lock. This is display-only data — it never blocks the
-  // page if it fails, it just means attempted tests won't show as locked.
   useEffect(() => {
     if (!user) return;
     const identifier = user.phone || user.id;
@@ -67,6 +64,10 @@ export const TestsPage: React.FC = () => {
     const matchesType = selectedType === 'all' || t.type === selectedType;
     return matchesClass && matchesType;
   });
+
+  // Format marksPerQuestion without a trailing ".0" (e.g. "5" not "5.0"),
+  // but keep decimals when they matter (e.g. "2.5").
+  const formatMarks = (n: number) => (Number.isInteger(n) ? n.toString() : n.toFixed(2).replace(/0+$/, '').replace(/\.$/, ''));
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 py-12 px-4 sm:px-6 lg:px-8 space-y-10">
@@ -122,6 +123,7 @@ export const TestsPage: React.FC = () => {
             const isActive = test.status === 'Active';
             const isUpcoming = test.status === 'Upcoming';
             const isCompleted = test.status === 'Completed';
+            const attempt = userAttemptsMap[test.id];
 
             return (
               <div
@@ -134,14 +136,14 @@ export const TestsPage: React.FC = () => {
                       Class {test.class} • {test.type}
                     </span>
 
-                    {userAttemptsMap[test.id] && (
+                    {attempt && (
                       <span className="bg-amber-50 text-amber-900 text-[10px] font-bold uppercase px-2 py-0.5 rounded flex items-center gap-1 border border-amber-200">
                         <CheckCircle className="w-3.5 h-3.5 text-amber-600" />
-                        Attempted (Score: {userAttemptsMap[test.id].score}/50)
+                        Attempted (Score: {attempt.score}/{attempt.totalMarks ?? test.marks})
                       </span>
                     )}
 
-                    {isActive && !userAttemptsMap[test.id] && (
+                    {isActive && !attempt && (
                       <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold uppercase px-2 py-0.5 rounded flex items-center gap-1 border border-emerald-200">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
                         Active Now
@@ -154,7 +156,7 @@ export const TestsPage: React.FC = () => {
                       </span>
                     )}
 
-                    {isCompleted && !userAttemptsMap[test.id] && (
+                    {isCompleted && !attempt && (
                       <span className="bg-slate-100 text-slate-600 text-[10px] font-bold uppercase px-2 py-0.5 rounded">
                         Completed
                       </span>
@@ -169,6 +171,10 @@ export const TestsPage: React.FC = () => {
                       {test.totalQuestions} Questions ({test.marks} Marks)
                     </span>
                     <span className="flex items-center gap-1">
+                      <Award className="w-3.5 h-3.5 text-blue-600" />
+                      {formatMarks(test.marksPerQuestion)} Marks / Question
+                    </span>
+                    <span className="flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5 text-blue-600" />
                       {test.durationMinutes} Minutes Time Limit
                     </span>
@@ -176,7 +182,7 @@ export const TestsPage: React.FC = () => {
                 </div>
 
                 <div className="shrink-0 w-full md:w-auto">
-                  {userAttemptsMap[test.id] ? (
+                  {attempt ? (
                     <button
                       onClick={() => navigate(`/tests/${test.id}/result`)}
                       className="w-full md:w-auto bg-slate-900 hover:bg-slate-800 text-white font-black px-5 py-3 rounded-xl text-xs sm:text-sm shadow-md flex items-center justify-center gap-2 transition-transform hover:scale-105"

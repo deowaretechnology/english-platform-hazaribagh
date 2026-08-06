@@ -49,6 +49,12 @@ export interface TeacherItem {
   subjects: string[];
 }
 
+// Same rounding rule the backend uses (src/lib/testMarks.ts) — keep both
+// in sync if this logic ever changes.
+function roundTo2(num: number): number {
+  return Math.round((num + Number.EPSILON) * 100) / 100;
+}
+
 // GROQ Queries
 export async function fetchCoursesFromSanity(): Promise<Course[]> {
   try {
@@ -138,10 +144,8 @@ export async function fetchCoursesFromSanity(): Promise<Course[]> {
                 "Grammar & Prose"
               ],
 
-        // Teacher object
         teacher: item.teacher || null,
 
-        // Display string
         instructor: item.teacher
           ? `${item.teacher.name}${
               item.teacher.experience
@@ -339,22 +343,46 @@ export async function fetchTestsFromSanity(): Promise<Test[]> {
     }`;
     const raw: any[] = await sanityClient.fetch(query);
     if (Array.isArray(raw) && raw.length > 0) {
-      return raw.map((item, idx) => ({
-        id: item.slug || item._id || `test-${idx}`,
-        title: item.title || "Sunday OMR Mock Test",
-        class: (item.classLevel as any) || "10",
-        type: (item.type as any) || "Weekly OMR",
-        totalQuestions: item.questionCount > 0 ? item.questionCount : 20,
-        marks: item.marks || 50,
-        durationMinutes: item.durationMinutes || 30,
-        date: item.date || "Every Sunday, 10:00 AM",
-        status: (item.status as any) || "Active",
-      }));
+      return raw.map((item, idx) => {
+        // totalQuestions: prefer the linked "question" doc count; if this
+        // test stores questions inline instead (questions[] on the test
+        // doc itself), that count isn't visible to this listing query, so
+        // we fall back to a neutral placeholder purely for display here —
+        // the real per-question count is resolved server-side when the
+        // student actually opens the test.
+        const totalQuestions = item.questionCount > 0 ? item.questionCount : 20;
+
+        // marks: Sanity's `marks` field is the source of truth. Only if a
+        // test genuinely has no marks configured do we fall back to
+        // "1 mark per question" — never a fixed number like 50.
+        const marks = typeof item.marks === "number" && item.marks > 0
+          ? item.marks
+          : totalQuestions;
+
+        const marksPerQuestion = totalQuestions > 0 ? roundTo2(marks / totalQuestions) : 0;
+
+        return {
+          id: item.slug || item._id || `test-${idx}`,
+          title: item.title || "Sunday OMR Mock Test",
+          class: (item.classLevel as any) || "10",
+          type: (item.type as any) || "Weekly OMR",
+          totalQuestions,
+          marks,
+          marksPerQuestion,
+          durationMinutes: item.durationMinutes || 30,
+          date: item.date || "Every Sunday, 10:00 AM",
+          status: (item.status as any) || "Active",
+        };
+      });
     }
   } catch (err) {
     console.warn("Failed to fetch tests from Sanity:", err);
   }
-  return testsData;
+  return testsData.map((t: any) => ({
+    ...t,
+    marksPerQuestion:
+      t.totalQuestions > 0 ? roundTo2((t.marks ?? t.totalQuestions) / t.totalQuestions) : 0,
+  }));
 }
 
 export async function fetchFAQsFromSanity(): Promise<FAQItem[]> {
@@ -527,7 +555,6 @@ function extractOptionsFromSanityQ(q: any): string[] {
 
 export async function fetchTestQuestionsForStudent(testIdOrSlug: string) {
   try {
-    // 1. Fetch from inline test questions in Sanity
     const testDocQuery = `*[_type in ["test", "tests", "mockTest"] && (slug.current == $id || _id == $id)][0] {
       _id,
       title,
@@ -564,7 +591,6 @@ export async function fetchTestQuestionsForStudent(testIdOrSlug: string) {
       }));
     }
 
-    // 2. Fetch standalone question documents in Sanity
     const query = `*[_type == "question" && (testRef->_id == $id || testRef->slug.current == $id || classLevel == $id || testSlug == $id)] {
       _id,
       questionText,
@@ -593,7 +619,6 @@ export async function fetchTestQuestionsForStudent(testIdOrSlug: string) {
     console.warn("Failed to fetch Sanity test questions directly:", err);
   }
 
-  // 3. Fallback to local static testsData
   const matchedTest =
     testsData.find((t) => t.id === testIdOrSlug) || testsData[0];
   if (matchedTest && Array.isArray(matchedTest.questions)) {
