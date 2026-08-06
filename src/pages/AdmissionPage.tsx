@@ -286,7 +286,7 @@ export const AdmissionPage: React.FC = () => {
                       onChange={(e) => setFormData({ ...formData, mode: e.target.value })}
                       className="w-full bg-slate-50 border border-slate-300 focus:border-blue-600 rounded-xl px-4 py-3 text-sm text-slate-900 focus:outline-none"
                     >
-                      <option value="Offline Campus">Offline Campus (Ananda Chowk)</option>
+                      <option value="Offline Campus">Offline Campus (Babugaon Chowk)</option>
                       <option value="Online Portal Recording">Online Recorded & Live</option>
                       <option value="Hybrid (Offline + Online)">Hybrid (Offline + Online)</option>
                     </select>

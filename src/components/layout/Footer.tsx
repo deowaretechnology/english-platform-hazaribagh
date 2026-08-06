@@ -151,7 +151,7 @@ export const Footer: React.FC = () => {
             <ul className="space-y-3 text-slate-400">
               <li className="flex items-start gap-2.5">
                 <MapPin className="w-4 h-4 text-blue-400 shrink-0 mt-1" />
-                <span>Ananda Chowk, Opposite Zila School Main Gate, Hazaribagh, Jharkhand - 825301</span>
+                <span>Opposite Shiv Mandir, Babugaon Chowk, Hazaribagh, Jharkhand - 825301</span>
               </li>
               <li className="flex items-center gap-2.5">
                 <Phone className="w-4 h-4 text-blue-400 shrink-0" />
@@ -162,7 +162,7 @@ export const Footer: React.FC = () => {
               <li className="flex items-center gap-2.5">
                 <Mail className="w-4 h-4 text-blue-400 shrink-0" />
                 <a href="mailto:info@englishplatformhzb.com" className="hover:text-blue-400">
-                  info@englishplatformhzb.com
+                  englishplatformhazaribag@gmail.com
                 </a>
               </li>
               <li className="flex items-center gap-2.5">
