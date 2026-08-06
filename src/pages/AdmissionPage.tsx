@@ -224,7 +224,7 @@ export const AdmissionPage: React.FC = () => {
 
               <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
                 <a
-                  href={`https://wa.me/919876543210?text=${encodeURIComponent(
+                  href={`https://wa.me/916364240496?text=${encodeURIComponent(
                     `Hi, I submitted online admission form on website for ${formData.fullName} (Application ID: ${submittedAppId}). Please confirm my demo class timing.`
                   )}`}
                   target="_blank"
@@ -259,7 +259,7 @@ export const AdmissionPage: React.FC = () => {
                 <MapPin className="w-4 h-4 text-blue-600 shrink-0 mt-1" />
                 <div>
                   <strong className="block text-slate-900 font-semibold">Address:</strong>
-                  Ananda Chowk, Opposite Zila School Main Gate, Hazaribagh, Jharkhand - 825301
+                  babughat Chowk opposite Shiv Mandir second floor, Hazaribagh, Jharkhand - 825301
                 </div>
               </li>
 
@@ -267,7 +267,7 @@ export const AdmissionPage: React.FC = () => {
                 <Phone className="w-4 h-4 text-blue-600 shrink-0 mt-1" />
                 <div>
                   <strong className="block text-slate-900 font-semibold">Admission Helpline:</strong>
-                  +91 98765 43210 / +91 94311 00000
+                  +91 6364240496 
                 </div>
               </li>
 
