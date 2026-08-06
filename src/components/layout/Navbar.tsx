@@ -27,15 +27,10 @@ export const Navbar: React.FC = () => {
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 text-slate-900 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
-          
           {/* Logo */}
           <Link to="/" className="flex items-center gap-3 group">
-            <div className="w-11 h-11 rounded-xl bg-white p-0.5 shadow-md shadow-blue-500/10 group-hover:scale-105 transition-transform overflow-hidden">
-              <img
-                src={logo}
-                alt="English Platform Hazaribagh Logo"
-                className="w-full h-full object-contain rounded-[10px]"
-              />
+            <div className="w-11 h-11 rounded-xl bg-white border border-slate-200 p-1 shadow-md shadow-blue-500/10 group-hover:scale-105 transition-transform overflow-hidden flex items-center justify-center">
+              <img src={logo} alt="English Platform Hazaribagh Logo" className="w-full h-full object-contain" />
             </div>
             <div>
               <div className="font-extrabold text-lg sm:text-xl tracking-tight text-slate-900 leading-tight flex items-center gap-1.5">
@@ -70,7 +65,7 @@ export const Navbar: React.FC = () => {
           {/* User Auth / Call Buttons */}
           <div className="hidden md:flex items-center space-x-3">
             
-              href="tel:+919876543210"
+             <a href="tel:+919876543210"
               className="flex items-center gap-1.5 text-xs text-slate-700 hover:text-blue-600 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 transition-colors"
             >
               <Phone className="w-3.5 h-3.5 text-blue-600" />
@@ -131,7 +126,6 @@ export const Navbar: React.FC = () => {
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
           </div>
-
         </div>
       </div>
 
