@@ -119,7 +119,7 @@ function buildPdfBlob(title: string, subtitle: string, metaInfo: string, highlig
   streamLines.push('/F2 9 Tf');
   streamLines.push('0.3 0.4 0.6 rg');
   streamLines.push('50 50 Td');
-  streamLines.push('(Official Study Material provided by English Platform Hazaribagh. Contact: +91 98765 43210) Tj');
+  streamLines.push('(Official Study Material provided by English Platform Hazaribagh. Contact: +91 6364240496) Tj');
   streamLines.push('ET');
 
   const streamContent = streamLines.join('\n');
@@ -274,7 +274,7 @@ export function downloadStudentCardPdf(user: {
   const bodyParagraphs = [
     'STUDENT DETAILS:',
     `Student Name: ${user.name}`,
-    `Contact Mobile: ${user.phone || '+91 9876543210'}`,
+    `Contact Mobile: ${user.phone || '+91 6364240496'}`,
     `Enrolled Target Class: ${user.targetClass || 'Competitive / Board Exams'}`,
     'INSTITUTE RULES:',
     '1. Carry this official pass to all Sunday OMR Test Series and offline batches.',
