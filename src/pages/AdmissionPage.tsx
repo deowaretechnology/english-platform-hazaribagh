@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { fetchCoursesFromSanity } from '../lib/sanity/queries';
 import { Course } from '../types';
-import qrImage from '../assets/qr.png';
+import qrImage from '../assets/rqcode.png';
 
 type Step = 'form' | 'payment' | 'success';
 
