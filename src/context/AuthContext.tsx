@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { getApiUrl } from '../lib/api';
+import React, { createContext, useContext, useState } from 'react';
+import { apiFetch, ApiError } from '../lib/api';
 
 export interface EnrolledCourseItem {
   courseSlug: string;
@@ -28,46 +28,42 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const LOCAL_STORAGE_KEY = 'eph_user_session_v2';
-const REGISTERED_USERS_KEY = 'eph_registered_users_v2';
+// This key stores ONLY the current logged-in session (a cache of what the
+// backend already confirmed), so a refresh doesn't force a re-login.
+// It is never used to fabricate a user or bypass the backend.
+const SESSION_STORAGE_KEY = 'eph_user_session_v3';
+
+function mapServerUser(data: any, fallbackName?: string): UserSession {
+  const classLevel = data.classLevel || '10';
+  return {
+    id: data.id,
+    name: data.name || fallbackName?.trim() || 'Student',
+    phone: data.phone,
+    classLevel,
+    targetClass: data.targetClass || `Class ${classLevel}`,
+    admissionId: data.admissionId || `EPH-2026-${(data.id || '').toString().slice(-4) || '0000'}`,
+    enrolledCourses: data.enrolledCourses || [],
+    createdAt: data.createdAt ? new Date(data.createdAt).toISOString().split('T')[0] : undefined,
+  };
+}
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserSession | null>(() => {
     try {
-      const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (stored) {
-        return JSON.parse(stored);
-      }
-    } catch (err) {
-      console.error('Failed to load user session from localStorage', err);
+      const stored = localStorage.getItem(SESSION_STORAGE_KEY);
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
     }
-    return null;
   });
 
-  // Helper to save registered user locally
-  const saveRegisteredUserLocally = (newUser: UserSession) => {
-    try {
-      const existingRaw = localStorage.getItem(REGISTERED_USERS_KEY);
-      let list: Record<string, UserSession> = existingRaw ? JSON.parse(existingRaw) : {};
-      list[newUser.phone.trim()] = newUser;
-      localStorage.setItem(REGISTERED_USERS_KEY, JSON.stringify(list));
-    } catch (e) {
-      console.warn('Failed to save registered user locally', e);
+  const persistSession = (sessionUser: UserSession | null) => {
+    setUser(sessionUser);
+    if (sessionUser) {
+      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionUser));
+    } else {
+      localStorage.removeItem(SESSION_STORAGE_KEY);
     }
-  };
-
-  // Helper to check registered user locally
-  const getRegisteredUserLocally = (phone: string): UserSession | null => {
-    try {
-      const existingRaw = localStorage.getItem(REGISTERED_USERS_KEY);
-      if (existingRaw) {
-        const list: Record<string, UserSession> = JSON.parse(existingRaw);
-        return list[phone.trim()] || null;
-      }
-    } catch (e) {
-      console.warn('Failed to get registered user locally', e);
-    }
-    return null;
   };
 
   const login = async (phone: string, name?: string): Promise<{ success: boolean; error?: string }> => {
@@ -77,54 +73,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      const res = await fetch(getApiUrl('/api/auth/login'), {
+      const data = await apiFetch<{ success: boolean; user: any }>('/api/auth/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: cleanPhone })
+        json: { phone: cleanPhone },
       });
-      const data = await res.json();
-
-      if (data.success && data.user) {
-        const sessionUser: UserSession = {
-          id: data.user.id,
-          name: data.user.name || name?.trim() || 'Student',
-          phone: data.user.phone,
-          classLevel: data.user.classLevel || '10',
-          targetClass: `Class ${data.user.classLevel || '10'}`,
-          admissionId: 'EPH-2026-' + (data.user.id.slice(-4) || '8842'),
-          enrolledCourses: data.user.enrolledCourses || [`Class ${data.user.classLevel || '10'} Target Batch`],
-          createdAt: new Date(data.user.createdAt || Date.now()).toISOString().split('T')[0]
-        };
-
-        setUser(sessionUser);
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sessionUser));
-        saveRegisteredUserLocally(sessionUser);
-        return { success: true };
-      } else {
-        // Check local registered users list as fallback
-        const localReg = getRegisteredUserLocally(cleanPhone);
-        if (localReg) {
-          setUser(localReg);
-          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(localReg));
-          return { success: true };
-        }
-        return {
-          success: false,
-          error: data.error || 'Yeh mobile number registered nahi hai. Pehle Sign Up (Register) karein.'
-        };
-      }
+      const sessionUser = mapServerUser(data.user, name);
+      persistSession(sessionUser);
+      return { success: true };
     } catch (err) {
-      console.warn('Network error logging in, checking local registered list:', err);
-      const localReg = getRegisteredUserLocally(cleanPhone);
-      if (localReg) {
-        setUser(localReg);
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(localReg));
-        return { success: true };
-      }
-      return {
-        success: false,
-        error: 'Yeh mobile number registered nahi hai. Pehle Sign Up (Register) karein.'
-      };
+      const message =
+        err instanceof ApiError
+          ? err.status === 404
+            ? 'Yeh mobile number registered nahi hai. Pehle Sign Up (Register) karein.'
+            : err.message
+          : 'Kuch gadbad ho gayi. Kripya thodi der baad try karein.';
+      return { success: false, error: message };
     }
   };
 
@@ -142,58 +105,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cleanClass = targetClass.replace(/Class\s*/i, '') || '10';
 
     try {
-      const res = await fetch(getApiUrl('/api/auth/signup'), {
+      const data = await apiFetch<{ success: boolean; user: any }>('/api/auth/signup', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: name.trim(),
-          phone: cleanPhone,
-          classLevel: cleanClass
-        })
+        json: { name: name.trim(), phone: cleanPhone, classLevel: cleanClass, email },
       });
-      const data = await res.json();
-
-      if (data.success && data.user) {
-        const sessionUser: UserSession = {
-          id: data.user.id,
-          name: data.user.name,
-          phone: data.user.phone,
-          classLevel: data.user.classLevel,
-          targetClass: `Class ${data.user.classLevel}`,
-          admissionId: 'EPH-2026-' + (data.user.id.slice(-4) || '7721'),
-          enrolledCourses: data.user.enrolledCourses || [`Class ${data.user.classLevel} Target Batch`],
-          createdAt: new Date(data.user.createdAt || Date.now()).toISOString().split('T')[0]
-        };
-
-        setUser(sessionUser);
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sessionUser));
-        saveRegisteredUserLocally(sessionUser);
-        return { success: true };
-      } else {
-        return { success: false, error: data.error || 'Signup failed.' };
-      }
-    } catch (err) {
-      console.warn('Network error signing up, creating fallback session:', err);
-      const fallbackUser: UserSession = {
-        id: 'usr_' + cleanPhone,
-        name: name.trim(),
-        phone: cleanPhone,
-        classLevel: cleanClass,
-        targetClass: targetClass || 'Class 10',
-        admissionId: 'EPH-2026-3391',
-        enrolledCourses: [`${targetClass} Target Batch`],
-        createdAt: new Date().toISOString().split('T')[0]
-      };
-      setUser(fallbackUser);
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(fallbackUser));
-      saveRegisteredUserLocally(fallbackUser);
+      const sessionUser = mapServerUser(data.user, name);
+      persistSession(sessionUser);
       return { success: true };
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? err.status === 409
+            ? 'Yeh mobile number pehle se registered hai. Login karein.'
+            : err.message
+          : 'Signup fail ho gaya. Kripya thodi der baad try karein.';
+      return { success: false, error: message };
     }
   };
 
   const logout = () => {
-    setUser(null);
-    localStorage.removeItem(LOCAL_STORAGE_KEY);
+    persistSession(null);
   };
 
   return (
@@ -203,7 +134,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         signup,
         logout,
-        isAuthenticated: !!user
+        isAuthenticated: !!user,
       }}
     >
       {children}

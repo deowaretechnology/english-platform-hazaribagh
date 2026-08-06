@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Clock, ShieldAlert, CheckCircle2, ArrowRight, ArrowLeft, RefreshCw, AlertCircle, Lock } from 'lucide-react';
+import { Clock, CheckCircle2, ArrowRight, ArrowLeft, RefreshCw, AlertCircle, Lock } from 'lucide-react';
 import { seededShuffle } from '../lib/shuffle';
 import { useAuth } from '../context/AuthContext';
-import { getApiUrl } from '../lib/api';
+import { apiFetch, ApiError } from '../lib/api';
 import { fetchTestQuestionsForStudent } from '../lib/sanity/queries';
 
 interface Question {
@@ -17,7 +17,7 @@ export const TestTakingPage: React.FC = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
 
-  const studentId = user?.phone || user?.id || 'anonymous_student';
+  const studentId = user?.phone || user?.id || '';
   const testSlug = slug || 'default-test';
 
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -29,18 +29,20 @@ export const TestTakingPage: React.FC = () => {
   const [userAnswers, setUserAnswers] = useState<Record<string | number, number>>({});
   const [timeLeft, setTimeLeft] = useState<number>(30 * 60); // 30 mins default
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Storage key for progress
+  // Local storage here is ONLY an in-progress answer cache (survives an
+  // accidental refresh mid-test) — it is never treated as the record of
+  // truth for whether a test was attempted or what the score was. That
+  // always comes from the backend.
   const progressKey = `test_progress_${studentId}_${testSlug}`;
 
-  // Redirect to login if user is not authenticated
   useEffect(() => {
     if (!isAuthenticated && !user) {
       navigate(`/login?redirect=${encodeURIComponent(`/tests/${testSlug}`)}`, { replace: true });
     }
   }, [isAuthenticated, user, navigate, testSlug]);
 
-  // 1. Check attempt history & fetch questions from API route
   useEffect(() => {
     if (!isAuthenticated && !user) return;
 
@@ -48,53 +50,33 @@ export const TestTakingPage: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      // A. Check local storage for existing attempt
+      // A. Ask the backend if this student already attempted this test.
       try {
-        const localAttemptsRaw = localStorage.getItem(`eph_attempts_${studentId}`);
-        if (localAttemptsRaw) {
-          const localList = JSON.parse(localAttemptsRaw);
-          const match = localList.find((a: any) => a.testSlug === testSlug);
-          if (match) {
-            setExistingAttempt(match);
-            setLoading(false);
-            return;
-          }
+        const checkData = await apiFetch<{ success: boolean; attempted: boolean; attempt?: any }>(
+          `/api/tests/${testSlug}/check-attempt/${studentId}`
+        );
+        if (checkData.attempted) {
+          setExistingAttempt(checkData.attempt);
+          setLoading(false);
+          return;
         }
       } catch (e) {
-        console.warn('Error reading local attempts:', e);
+        console.warn('Could not check existing attempt (continuing to load questions):', e);
       }
 
-      // B. Check MongoDB backend for existing attempt
-      try {
-        const checkRes = await fetch(getApiUrl(`/api/tests/${testSlug}/check-attempt/${studentId}`));
-        if (checkRes.ok) {
-          const checkData = await checkRes.json();
-          if (checkData.success && checkData.attempted) {
-            setExistingAttempt(checkData.attempt);
-            setLoading(false);
-            return;
-          }
-        }
-      } catch (e) {
-        console.warn('Error checking server attempt:', e);
-      }
-
-      // C. Load questions from API, with fallback to Sanity / static data
+      // B. Load questions — try backend first, fall back to Sanity client
+      // (both are legitimate content sources, unlike fabricating a score).
       let loadedQuestions: Question[] = [];
 
       try {
-        const res = await fetch(getApiUrl(`/api/tests/${testSlug}/questions`));
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success && Array.isArray(data.questions) && data.questions.length > 0) {
-            loadedQuestions = data.questions;
-          }
+        const data = await apiFetch<{ success: boolean; questions: Question[] }>(`/api/tests/${testSlug}/questions`);
+        if (Array.isArray(data.questions) && data.questions.length > 0) {
+          loadedQuestions = data.questions;
         }
       } catch (err) {
-        console.warn('Backend API unavailable, falling back to Sanity / local static test data:', err);
+        console.warn('Backend question API unavailable, falling back to Sanity:', err);
       }
 
-      // Fallback to client-side Sanity query or static test data if API returned no questions
       if (loadedQuestions.length === 0) {
         try {
           const sanityQuestions: any = await fetchTestQuestionsForStudent(testSlug);
@@ -103,8 +85,6 @@ export const TestTakingPage: React.FC = () => {
               id: q.id || `q-${idx}`,
               questionText: q.questionText || q.question || `Question ${idx + 1}`,
               options: q.options || [],
-              correctAnswer: q.correctAnswer ?? 0,
-              explanation: q.explanation || ''
             }));
           }
         } catch (sanityErr) {
@@ -113,12 +93,10 @@ export const TestTakingPage: React.FC = () => {
       }
 
       if (loadedQuestions.length > 0) {
-        // Shuffle deterministically per student ID + test slug
         const seed = `${studentId}_${testSlug}`;
         const shuffled = seededShuffle<Question>(loadedQuestions, seed);
         setQuestions(shuffled);
 
-        // Restore saved progress if exists
         const saved = localStorage.getItem(progressKey);
         if (saved) {
           try {
@@ -139,22 +117,15 @@ export const TestTakingPage: React.FC = () => {
     checkAndLoadTest();
   }, [testSlug, studentId]);
 
-  // 2. Persist progress to LocalStorage on state change
   useEffect(() => {
     if (questions.length > 0) {
       localStorage.setItem(
         progressKey,
-        JSON.stringify({
-          userAnswers,
-          currentIdx,
-          timeLeft,
-          updatedAt: Date.now()
-        })
+        JSON.stringify({ userAnswers, currentIdx, timeLeft, updatedAt: Date.now() })
       );
     }
   }, [userAnswers, currentIdx, timeLeft, progressKey, questions.length]);
 
-  // 3. Countdown Timer
   useEffect(() => {
     if (loading || questions.length === 0) return;
 
@@ -162,7 +133,7 @@ export const TestTakingPage: React.FC = () => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          handleSubmitTest(); // Auto-submit when time expires
+          handleSubmitTest();
           return 0;
         }
         return prev - 1;
@@ -170,151 +141,49 @@ export const TestTakingPage: React.FC = () => {
     }, 1000);
 
     return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, questions.length]);
 
   const handleSelectOption = (optionIndex: number) => {
     const currentQ = questions[currentIdx];
     if (!currentQ) return;
+    if (userAnswers[currentQ.id] !== undefined) return; // locked
 
-    // Rule: If question is already answered, answer is LOCKED and CANNOT be changed!
-    if (userAnswers[currentQ.id] !== undefined) {
-      return;
-    }
-
-    const updated = {
-      ...userAnswers,
-      [currentQ.id]: optionIndex
-    };
-
+    const updated = { ...userAnswers, [currentQ.id]: optionIndex };
     setUserAnswers(updated);
-
-    // Save immediately to localStorage for instant refresh safety
     localStorage.setItem(
       progressKey,
-      JSON.stringify({
-        userAnswers: updated,
-        currentIdx,
-        timeLeft,
-        updatedAt: Date.now()
-      })
+      JSON.stringify({ userAnswers: updated, currentIdx, timeLeft, updatedAt: Date.now() })
     );
   };
 
-  // 4. Submit and Evaluation
+  // Submission is authoritative on the backend only. If the backend call
+  // fails we show a real error and let the student retry — we never
+  // compute a fake score client-side and pretend it was saved.
   const handleSubmitTest = async () => {
     if (isSubmitting) return;
     setIsSubmitting(true);
-
-    let resultData: any = null;
+    setSubmitError(null);
 
     try {
-      const res = await fetch(getApiUrl('/api/tests/evaluate'), {
+      const data = await apiFetch<{ success: boolean } & Record<string, any>>('/api/tests/evaluate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: studentId,
-          slug: testSlug,
-          userAnswers
-        })
+        json: { userId: studentId, slug: testSlug, userAnswers },
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.success) {
-          resultData = data;
-        }
-      }
-    } catch (err) {
-      console.warn('Backend API evaluation unavailable, evaluating client-side:', err);
-    }
-
-    // Client-side fallback evaluation if backend response was not received
-    if (!resultData) {
-      let correctCount = 0;
-      const totalQuestions = questions.length;
-      const breakdown = questions.map((q) => {
-        const userSelectedIdx = userAnswers[q.id];
-        const userSelectedText = typeof userSelectedIdx === 'number' && q.options[userSelectedIdx] !== undefined
-          ? q.options[userSelectedIdx]
-          : 'Not Answered';
-
-        const correctIdx = (q as any).correctAnswer ?? (q as any).correctOption ?? 0;
-        const correctText = q.options[correctIdx] || q.options[0] || 'Option A';
-        const isCorrect = userSelectedIdx === correctIdx;
-        if (isCorrect) correctCount++;
-
-        return {
-          questionId: q.id,
-          questionText: q.questionText || (q as any).question || 'Question',
-          userAnswer: userSelectedText,
-          correctAnswer: correctText,
-          isCorrect,
-          explanation: (q as any).explanation || ''
-        };
-      });
-
-      const score = correctCount * 2;
-      const percentage = Math.round((correctCount / Math.max(totalQuestions, 1)) * 100);
-
-      resultData = {
-        success: true,
-        testTitle: testSlug.toUpperCase().replace(/-/g, ' '),
-        classLevel: user?.classLevel || '10',
-        correctCount,
-        totalQuestions,
-        score,
-        totalMarks: totalQuestions * 2,
-        percentage,
-        percentile: Math.min(99, Math.max(50, percentage + 5)),
-        breakdown
-      };
-    }
-
-    if (resultData && resultData.success) {
-      // Clear in-progress storage
       localStorage.removeItem(progressKey);
-
-      // Store persistent local attempt snapshot for profile & attempt checks
-      try {
-        const attemptSnapshot = {
-          id: 'att_' + Date.now(),
-          testSlug: testSlug,
-          testTitle: resultData.testTitle || testSlug.toUpperCase().replace(/-/g, ' '),
-          classLevel: resultData.classLevel || user?.classLevel || '10',
-          score: resultData.score,
-          totalQuestions: resultData.totalQuestions,
-          accuracyPercent: resultData.percentage,
-          questions: (resultData.breakdown || []).map((b: any) => ({
-            questionText: b.questionText,
-            options: [b.userAnswer, b.correctAnswer],
-            correctOption: b.isCorrect ? 0 : 1,
-            studentAnswer: 0,
-            isCorrect: b.isCorrect
-          })),
-          submittedAt: new Date().toISOString()
-        };
-
-        const localAttemptsRaw = localStorage.getItem(`eph_attempts_${studentId}`);
-        let localList = localAttemptsRaw ? JSON.parse(localAttemptsRaw) : [];
-        localList = localList.filter((a: any) => a.testSlug !== testSlug);
-        localList.unshift(attemptSnapshot);
-        localStorage.setItem(`eph_attempts_${studentId}`, JSON.stringify(localList));
-      } catch (e) {
-        console.warn('Failed to save local attempt snapshot:', e);
-      }
-
-      // Store result for display on result page
-      localStorage.setItem(`test_result_${testSlug}`, JSON.stringify(resultData));
-
-      // Redirect to result page
+      localStorage.setItem(`test_result_${testSlug}`, JSON.stringify(data));
       navigate(`/tests/${testSlug}/result`);
-    } else {
-      alert('Evaluation failed. Please try again.');
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? `Submission failed: ${err.message}`
+          : 'Could not submit your test — please check your connection and try again.';
+      setSubmitError(message);
       setIsSubmitting(false);
     }
   };
 
-  // Format MM:SS
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -373,7 +242,6 @@ export const TestTakingPage: React.FC = () => {
             </p>
           </div>
 
-          {/* Score Summary Box */}
           <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 grid grid-cols-3 gap-2 text-center">
             <div>
               <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Your Score</div>
@@ -440,8 +308,7 @@ export const TestTakingPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col">
-      
-      {/* Test Header */}
+
       <header className="bg-slate-900 text-white border-b border-slate-800 px-4 sm:px-8 py-4 sticky top-0 z-30 flex items-center justify-between shadow-md">
         <div>
           <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400">
@@ -453,7 +320,6 @@ export const TestTakingPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-4">
-          {/* Timer Badge */}
           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-mono font-bold ${
             timeLeft < 300 ? 'bg-rose-500/20 border-rose-500 text-rose-300 animate-pulse' : 'bg-slate-800 border-slate-700 text-blue-300'
           }`}>
@@ -475,15 +341,21 @@ export const TestTakingPage: React.FC = () => {
         </div>
       </header>
 
-      {/* Test Body Layout */}
+      {submitError && (
+        <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 pt-4">
+          <div className="bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold p-3.5 rounded-xl flex items-center gap-2.5">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{submitError}</span>
+          </div>
+        </div>
+      )}
+
       <div className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-4 gap-6">
-        
-        {/* Main Question Panel (Cols 3) */}
+
         <div className="lg:col-span-3 space-y-6">
-          
+
           <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-6">
-            
-            {/* Question Header Status */}
+
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <span className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200 px-3 py-1 rounded-full uppercase">
                 Question {currentIdx + 1} of {questions.length}
@@ -500,7 +372,6 @@ export const TestTakingPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Answer Locked Banner if attempted */}
             {isAnswerLocked && (
               <div className="bg-amber-50 border border-amber-200 text-amber-900 text-xs p-3.5 rounded-xl flex items-center gap-2.5 font-semibold">
                 <Lock className="w-4 h-4 text-amber-600 shrink-0" />
@@ -510,12 +381,10 @@ export const TestTakingPage: React.FC = () => {
               </div>
             )}
 
-            {/* Question Prompt */}
             <div className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
               {currentQ.questionText || (currentQ as any).question || 'Question Text'}
             </div>
 
-            {/* MCQ Options */}
             <div className="space-y-3 pt-2">
               {((Array.isArray(currentQ.options) && currentQ.options.length > 0)
                 ? currentQ.options
@@ -527,7 +396,7 @@ export const TestTakingPage: React.FC = () => {
                   ].filter(Boolean)
               ).map((optText: string, idx: number) => {
                 const isSelected = selectedOptionIdx === idx;
-                const optionLabel = String.fromCharCode(65 + idx); // A, B, C, D
+                const optionLabel = String.fromCharCode(65 + idx);
 
                 return (
                   <button
@@ -564,7 +433,6 @@ export const TestTakingPage: React.FC = () => {
               })}
             </div>
 
-            {/* Action Bar */}
             <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
               <div>
                 {isAnswerLocked ? (
@@ -611,10 +479,9 @@ export const TestTakingPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Sidebar Question Palette (Col 1) */}
         <div className="space-y-6">
           <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
-            
+
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-bold text-sm text-slate-900">Question Palette</h3>
               <span className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-full">
@@ -622,7 +489,6 @@ export const TestTakingPage: React.FC = () => {
               </span>
             </div>
 
-            {/* Grid of Number Buttons */}
             <div className="grid grid-cols-5 gap-2">
               {questions.map((q, idx) => {
                 const isAnswered = userAnswers[q.id] !== undefined;

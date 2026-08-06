@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Clock, HelpCircle, Play, CheckCircle, Lock, AlertCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Clock, HelpCircle, Play, CheckCircle, Lock } from 'lucide-react';
 import { fetchTestsFromSanity } from '../lib/sanity/queries';
-import { getApiUrl } from '../lib/api';
+import { apiFetch } from '../lib/api';
 import { ClassFilter } from '../components/ui/ClassFilter';
 import { ClassLevel, Test } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -31,7 +31,7 @@ export const TestsPage: React.FC = () => {
         const fetched = await fetchTestsFromSanity();
         setTests(fetched);
       } catch (err) {
-        console.error('Error fetching tests:', err);
+        console.error('Error fetching tests from Sanity:', err);
       } finally {
         setLoading(false);
       }
@@ -39,41 +39,24 @@ export const TestsPage: React.FC = () => {
     loadData();
   }, []);
 
-  // Fetch user attempts to prevent retaking & display scores
+  // Fetch the user's attempts from the backend (source of truth) so we know
+  // which tests to lock. This is display-only data — it never blocks the
+  // page if it fails, it just means attempted tests won't show as locked.
   useEffect(() => {
     if (!user) return;
     const identifier = user.phone || user.id;
 
     async function loadUserAttempts() {
-      const map: Record<string, any> = {};
-
-      // 1. Read local storage
       try {
-        const rawLocal = localStorage.getItem(`eph_attempts_${identifier}`);
-        if (rawLocal) {
-          const list = JSON.parse(rawLocal);
-          list.forEach((item: any) => {
-            if (item.testSlug) map[item.testSlug] = item;
-          });
-        }
+        const data = await apiFetch<{ success: boolean; attempts: any[] }>(`/api/auth/user/${identifier}`);
+        const map: Record<string, any> = {};
+        (data.attempts || []).forEach((att: any) => {
+          if (att.testSlug) map[att.testSlug] = att;
+        });
+        setUserAttemptsMap(map);
       } catch (e) {
-        console.warn('Error reading local attempts in TestsPage:', e);
+        console.warn('Could not load attempt history:', e);
       }
-
-      // 2. Fetch server DB attempts
-      try {
-        const res = await fetch(getApiUrl(`/api/auth/user/${identifier}`));
-        const data = await res.json();
-        if (data.success && data.attempts) {
-          data.attempts.forEach((att: any) => {
-            if (att.testSlug) map[att.testSlug] = att;
-          });
-        }
-      } catch (e) {
-        console.warn('Error reading server attempts in TestsPage:', e);
-      }
-
-      setUserAttemptsMap(map);
     }
 
     loadUserAttempts();
@@ -87,7 +70,7 @@ export const TestsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 py-12 px-4 sm:px-6 lg:px-8 space-y-10">
-      
+
       {/* Header */}
       <div className="max-w-4xl mx-auto text-center space-y-3">
         <div className="inline-flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-700 px-3.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
@@ -150,7 +133,7 @@ export const TestsPage: React.FC = () => {
                     <span className="bg-blue-50 text-blue-700 text-[11px] font-bold uppercase px-2.5 py-0.5 rounded border border-blue-200">
                       Class {test.class} • {test.type}
                     </span>
-                    
+
                     {userAttemptsMap[test.id] && (
                       <span className="bg-amber-50 text-amber-900 text-[10px] font-bold uppercase px-2 py-0.5 rounded flex items-center gap-1 border border-amber-200">
                         <CheckCircle className="w-3.5 h-3.5 text-amber-600" />
