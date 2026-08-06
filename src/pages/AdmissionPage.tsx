@@ -576,7 +576,7 @@ export const AdmissionPage: React.FC = () => {
                 <MapPin className="w-4 h-4 text-blue-600 shrink-0 mt-1" />
                 <div>
                   <strong className="block text-slate-900 font-semibold">Address:</strong>
-                  babughat Chowk opposite Shiv Mandir second floor, Hazaribagh, Jharkhand - 825301
+                  Babugaon Chowk opposite Shiv Mandir second floor, Hazaribagh, Jharkhand - 825301
                 </div>
               </li>
 
