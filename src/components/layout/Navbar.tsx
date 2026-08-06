@@ -69,7 +69,7 @@ export const Navbar: React.FC = () => {
               className="flex items-center gap-1.5 text-xs text-slate-700 hover:text-blue-600 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 transition-colors"
             >
               <Phone className="w-3.5 h-3.5 text-blue-600" />
-              <span className="font-semibold">+91 98765 43210</span>
+              <span className="font-semibold">+91 6364240496</span>
             </a>
 
             {isAuthenticated ? (
