@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Phone, User as UserIcon, Lock, ArrowRight, GraduationCap, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { getPhoneValidationError } from '../lib/phoneValidation';
 
 export const LoginPage: React.FC = () => {
   const [phone, setPhone] = useState('');
@@ -19,13 +20,9 @@ export const LoginPage: React.FC = () => {
     setError('');
 
     const cleanPhone = phone.trim();
-    if (!cleanPhone) {
-      setError('Kripya apna 10-digit registered mobile number darj karein.');
-      return;
-    }
-
-    if (cleanPhone.length < 10) {
-      setError('Kripya valid 10-digit mobile number darj karein.');
+    const validationError = getPhoneValidationError(cleanPhone);
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
@@ -83,14 +80,17 @@ export const LoginPage: React.FC = () => {
             </label>
             <div className="relative">
               <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <span className="absolute left-10 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-500 select-none">
+                +91
+              </span>
               <input
                 type="tel"
                 required
                 maxLength={10}
                 value={phone}
-                onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
-                placeholder="Enter 10-digit Mobile Number"
-                className="w-full bg-slate-50 border border-slate-300 focus:border-blue-600 rounded-xl pl-10 pr-4 py-3.5 text-sm font-semibold text-slate-900 focus:outline-none"
+                onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                placeholder="9876543210"
+                className="w-full bg-slate-50 border border-slate-300 focus:border-blue-600 rounded-xl pl-[4.25rem] pr-4 py-3.5 text-sm font-semibold text-slate-900 focus:outline-none"
               />
             </div>
           </div>

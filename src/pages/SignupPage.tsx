@@ -4,6 +4,7 @@ import { Phone, User as UserIcon, Mail, BookOpen, ArrowRight, GraduationCap, Ale
 import { useAuth } from '../context/AuthContext';
 import { fetchCoursesFromSanity } from '../lib/sanity/queries';
 import { Course } from '../types';
+import { getPhoneValidationError } from '../lib/phoneValidation';
 
 export const SignupPage: React.FC = () => {
   const [name, setName] = useState('');
@@ -29,12 +30,21 @@ export const SignupPage: React.FC = () => {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !phone.trim()) {
-      setError('Please fill in your name and phone number.');
+    setError('');
+
+    if (!name.trim()) {
+      setError('Please enter your full name.');
       return;
     }
 
-    const res = await signup(name, phone, targetClass, email);
+    const cleanPhone = phone.trim();
+    const validationError = getPhoneValidationError(cleanPhone);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    const res = await signup(name, cleanPhone, targetClass, email);
     if (res.success) {
       if (redirectUrl) {
         navigate(redirectUrl);
@@ -101,13 +111,17 @@ export const SignupPage: React.FC = () => {
             </label>
             <div className="relative">
               <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <span className="absolute left-10 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-500 select-none">
+                +91
+              </span>
               <input
                 type="tel"
                 required
+                maxLength={10}
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="10-digit Mobile Number"
-                className="w-full bg-slate-50 border border-slate-300 focus:border-blue-600 rounded-xl pl-10 pr-4 py-3 text-sm text-slate-900 focus:outline-none"
+                onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                placeholder="9876543210"
+                className="w-full bg-slate-50 border border-slate-300 focus:border-blue-600 rounded-xl pl-[4.25rem] pr-4 py-3 text-sm text-slate-900 focus:outline-none"
               />
             </div>
           </div>
