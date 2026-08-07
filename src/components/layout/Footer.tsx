@@ -223,12 +223,12 @@ export const Footer: React.FC = () => {
           </div>
         </div>
 
-        <div className="mt-12 pt-8 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-4">
-          <p>
-            © {new Date().getFullYear()} English Platform Hazaribagh. All rights
-            reserved.
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4">
+          <p className="text-slate-400 text-sm">
+            © 2026 English Platform Hazaribagh. All rights reserved.
           </p>
-          <p className="flex items-center justify-center gap-2">
+          <p className="hidden sm:block text-slate-400">•</p>
+          <p className="flex items-center gap-2">
             <span>Designed By</span>
             <span>•</span>
 
