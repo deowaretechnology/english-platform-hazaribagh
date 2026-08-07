@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 
 import authRoutes from './routes/authRoutes.js';
 import testRoutes from './routes/testRoutes.js';
+import sanityImportRoutes from './controllers/sanityImportRoutes.js';
 import { connectToDatabase } from './lib/db/mongodb.js';
 
 dotenv.config();
@@ -18,6 +19,7 @@ app.use(
       'http://localhost:5173',
       'http://localhost:3000',
       'https://english-platform-hazaribagh.vercel.app',
+      'https://english-platform-hazaribagh.sanity.studio',
     ],
     credentials: true,
   })
@@ -46,6 +48,7 @@ async function startServer() {
     // Register Routes
     app.use('/api/auth', authRoutes);
     app.use('/api/tests', testRoutes);
+    app.use('/api/sanity', sanityImportRoutes);
 
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Backend API running on port ${PORT}`);
