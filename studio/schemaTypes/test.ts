@@ -90,6 +90,14 @@ export default defineType({
       initialValue: 'Active',
     }),
     defineField({
+      name: 'questionWordUpload',
+      title: 'Question Word File (for bulk import)',
+      description:
+        'Upload a .docx file with questions in this format — Q1 / question text / Option A: .. / Option B: .. / Option C: .. / Option D: .. / Answer: A. After uploading, SAVE this document first, then use the "Extract Questions from Word File" button (top-right) to preview and add them below.',
+      type: 'file',
+      options: { accept: '.docx' },
+    }),
+    defineField({
       name: 'questions',
       title: 'Questions',
       description: 'Add multiple question cards to this test series. Cards can be dragged to reorder and collapsed for a clean editor experience.',
@@ -206,4 +214,3 @@ export default defineType({
     },
   },
 });
-

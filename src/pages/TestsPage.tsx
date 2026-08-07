@@ -85,6 +85,32 @@ export const TestsPage: React.FC = () => {
         </p>
       </div>
 
+      {/* Control Bars */}
+      <div className="max-w-5xl mx-auto space-y-6">
+        <ClassFilter selectedClass={selectedClass} onSelectClass={setSelectedClass} showAllOptions={false} />
+
+        {/* Type Filter Tabs */}
+        <div className="flex items-center justify-center gap-2 overflow-x-auto pb-1">
+          {[
+            { id: 'all', label: 'All Tests' },
+            { id: 'Weekly OMR', label: 'Weekly OMR' },
+            { id: 'Monthly Grand', label: 'Monthly Grand' },
+            { id: 'Board Mock', label: 'Board Pattern Mock' }
+          ].map((typeOpt) => (
+            <button
+              key={typeOpt.id}
+              onClick={() => setSelectedType(typeOpt.id)}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                selectedType === typeOpt.id
+                  ? 'bg-blue-600 text-white font-black shadow-xs'
+                  : 'bg-white border border-slate-200 text-slate-600 hover:text-blue-600'
+              }`}
+            >
+              {typeOpt.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Test List Grid */}
       <div className="max-w-5xl mx-auto space-y-4">
