@@ -3,7 +3,7 @@ import { backendSanityClient } from '../lib/sanity/sanity.js';
 import { extractTextFromDocxBuffer } from '../lib/docxText.js';
 import { parseQuestions } from '../lib/questionParser.js';
 
-// READ-ONLY with respect to Sanity — this endpoint never writes anything.
+// READ-ONLY with respect to Sanity -- this endpoint never writes anything.
 // It downloads the Word file the editor uploaded to the test document,
 // extracts + parses the questions, and hands them back so Sanity Studio
 // can show a preview. The actual write happens from Studio itself, using
@@ -20,7 +20,7 @@ export async function handleExtractQuestionsPreview(req: Request, res: Response)
     // Studio can send either "drafts.xxx" (unsaved/unpublished edits) or
     // the plain "xxx" (published). The document that actually has the
     // latest uploaded Word file could be either one depending on whether
-    // the editor has hit Publish yet — so resolve BOTH ids and prefer
+    // the editor has hit Publish yet -- so resolve BOTH ids and prefer
     // whichever one actually has a questionWordUpload file, draft first.
     const baseId = testId.replace(/^drafts\./, '');
     const draftId = `drafts.${baseId}`;
@@ -35,14 +35,6 @@ export async function handleExtractQuestionsPreview(req: Request, res: Response)
     );
 
     if (!candidates || candidates.length === 0) {
-      // This is the exact failure you were hitting. If we land here,
-      // it is almost always ONE of:
-      //   1. SANITY_API_TOKEN missing/invalid on the backend (Render env)
-      //      -> drafts are invisible to unauthenticated/under-permissioned
-      //         requests, full stop.
-      //   2. Wrong SANITY_PROJECT_ID / SANITY_DATASET on the backend vs
-      //      what Studio is actually writing to.
-      //   3. useCdn: true on the client (CDN never serves drafts).
       return res.status(404).json({
         success: false,
         error:
