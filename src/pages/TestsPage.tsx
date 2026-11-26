@@ -46,9 +46,12 @@ export const TestsPage: React.FC = () => {
     async function loadUserAttempts() {
       try {
         const data = await apiFetch<{ success: boolean; attempts: any[] }>(`/api/auth/user/${identifier}`);
+        // attempts come newest-first: keep the LATEST attempt and count all of them
         const map: Record<string, any> = {};
         (data.attempts || []).forEach((att: any) => {
-          if (att.testSlug) map[att.testSlug] = att;
+          if (!att.testSlug) return;
+          if (!map[att.testSlug]) map[att.testSlug] = { ...att, attemptCount: 0 };
+          map[att.testSlug].attemptCount += 1;
         });
         setUserAttemptsMap(map);
       } catch (e) {
@@ -139,7 +142,7 @@ export const TestsPage: React.FC = () => {
                     {attempt && (
                       <span className="bg-amber-50 text-amber-900 text-[10px] font-bold uppercase px-2 py-0.5 rounded flex items-center gap-1 border border-amber-200">
                         <CheckCircle className="w-3.5 h-3.5 text-amber-600" />
-                        Attempted (Score: {attempt.score}/{attempt.totalMarks ?? test.marks})
+                        Attempted {attempt.attemptCount}x (Latest: {attempt.score}/{attempt.totalMarks ?? test.marks})
                       </span>
                     )}
 
@@ -182,14 +185,23 @@ export const TestsPage: React.FC = () => {
                 </div>
 
                 <div className="shrink-0 w-full md:w-auto">
-                  {attempt ? (
-                    <button
-                      onClick={() => navigate(`/tests/${test.id}/result`)}
-                      className="w-full md:w-auto bg-slate-900 hover:bg-slate-800 text-white font-black px-5 py-3 rounded-xl text-xs sm:text-sm shadow-md flex items-center justify-center gap-2 transition-transform hover:scale-105"
-                    >
-                      <Lock className="w-4 h-4 text-amber-400" />
-                      <span>Already Attempted • View Score</span>
-                    </button>
+                  {attempt && (isActive || isCompleted) ? (
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <button
+                        onClick={() => navigate(`/tests/${test.id}/result`)}
+                        className="w-full md:w-auto bg-slate-900 hover:bg-slate-800 text-white font-black px-5 py-3 rounded-xl text-xs sm:text-sm shadow-md flex items-center justify-center gap-2 transition-transform hover:scale-105"
+                      >
+                        <CheckCircle className="w-4 h-4 text-amber-400" />
+                        <span>View Last Score</span>
+                      </button>
+                      <button
+                        onClick={() => handleStartTest(test.id)}
+                        className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white font-extrabold px-5 py-3 rounded-xl text-xs sm:text-sm shadow-md flex items-center justify-center gap-2 transition-transform hover:scale-105"
+                      >
+                        <Play className="w-4 h-4 fill-white" />
+                        <span>Retake Test</span>
+                      </button>
+                    </div>
                   ) : isActive || isCompleted ? (
                     <button
                       onClick={() => handleStartTest(test.id)}

@@ -278,9 +278,19 @@ export async function handleEvaluateTest(req: Request, res: Response) {
   const percentage = Math.round((correctCount / (totalQuestions || 1)) * 100) || 0;
   const percentile = Math.min(99, Math.round(percentage + 7.5));
 
+  // Every submission is stored as a NEW record, so a student can take the same
+  // test many times and every result stays in their profile history.
+  let attemptNumber = 1;
   try {
     const db = await connectToDatabase();
     if (db) {
+      const studentKey = userId || 'anonymous_student';
+      const previousCount = await TestAttempt.countDocuments({
+        testSlug: slug,
+        $or: [{ userId: studentKey }, { userPhone: studentKey }]
+      } as any);
+      attemptNumber = previousCount + 1;
+
       await TestAttempt.create({
         userId: userId || 'anonymous_student',
         userPhone: userId,
@@ -312,40 +322,44 @@ export async function handleEvaluateTest(req: Request, res: Response) {
     marksPerQuestion,
     percentage,
     percentile,
+    attemptNumber,
     breakdown
   });
 }
 
+// Retakes are allowed. This endpoint no longer blocks the student; it only
+// reports how many times the test was attempted before and the latest attempt.
 export async function handleCheckTestAttempt(req: Request, res: Response) {
   const { slug, userId } = req.params;
 
   if (!slug || !userId) {
-    return res.json({ success: true, attempted: false });
+    return res.json({ success: true, attempted: false, attemptCount: 0 });
   }
 
   try {
     const db = await connectToDatabase();
     if (db) {
-      const attempt: any = await TestAttempt.findOne({
-        testSlug: slug,
-        $or: [{ userId: userId }, { userPhone: userId }]
-      } as any).lean();
+      const filter = { testSlug: slug, $or: [{ userId: userId }, { userPhone: userId }] } as any;
+      const attemptCount = await TestAttempt.countDocuments(filter);
+      const latest: any = await TestAttempt.findOne(filter).sort({ submittedAt: -1 } as any).lean();
 
-      if (attempt) {
+      if (latest) {
         return res.json({
           success: true,
           attempted: true,
+          canRetake: true,
+          attemptCount,
           attempt: {
-            id: attempt._id.toString(),
-            testSlug: attempt.testSlug,
-            testTitle: attempt.testTitle,
-            classLevel: attempt.classLevel,
-            score: attempt.score,
-            totalMarks: attempt.totalMarks,
-            marksPerQuestion: attempt.marksPerQuestion,
-            totalQuestions: attempt.totalQuestions,
-            accuracyPercent: attempt.accuracyPercent,
-            submittedAt: attempt.submittedAt
+            id: latest._id.toString(),
+            testSlug: latest.testSlug,
+            testTitle: latest.testTitle,
+            classLevel: latest.classLevel,
+            score: latest.score,
+            totalMarks: latest.totalMarks,
+            marksPerQuestion: latest.marksPerQuestion,
+            totalQuestions: latest.totalQuestions,
+            accuracyPercent: latest.accuracyPercent,
+            submittedAt: latest.submittedAt
           }
         });
       }
@@ -354,5 +368,5 @@ export async function handleCheckTestAttempt(req: Request, res: Response) {
     console.warn('Error checking test attempt in MongoDB:', err);
   }
 
-  return res.json({ success: true, attempted: false });
+  return res.json({ success: true, attempted: false, attemptCount: 0 });
 }

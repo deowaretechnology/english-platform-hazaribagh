@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Clock, CheckCircle2, ArrowRight, ArrowLeft, RefreshCw, AlertCircle, Lock } from 'lucide-react';
+import { Clock, ArrowRight, ArrowLeft, RefreshCw, AlertCircle, Lock } from 'lucide-react';
 import { seededShuffle } from '../lib/shuffle';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch, ApiError } from '../lib/api';
@@ -43,7 +43,6 @@ export const TestTakingPage: React.FC = () => {
   const [testInfo, setTestInfo] = useState<TestInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [existingAttempt, setExistingAttempt] = useState<any | null>(null);
 
   const [currentIdx, setCurrentIdx] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<string | number, number>>({});
@@ -65,19 +64,6 @@ export const TestTakingPage: React.FC = () => {
     async function checkAndLoadTest() {
       setLoading(true);
       setError(null);
-
-      try {
-        const checkData = await apiFetch<{ success: boolean; attempted: boolean; attempt?: any }>(
-          `/api/tests/${testSlug}/check-attempt/${studentId}`
-        );
-        if (checkData.attempted) {
-          setExistingAttempt(checkData.attempt);
-          setLoading(false);
-          return;
-        }
-      } catch (e) {
-        console.warn('Could not check existing attempt (continuing to load questions):', e);
-      }
 
       let loadedQuestions: Question[] = [];
       let loadedTestInfo: TestInfo | null = null;
@@ -243,75 +229,6 @@ export const TestTakingPage: React.FC = () => {
           <RefreshCw className="w-10 h-10 text-blue-600 animate-spin mx-auto" />
           <h2 className="text-lg font-bold text-slate-800">Preparing OMR Question Paper...</h2>
           <p className="text-xs text-slate-500">Shuffling questions deterministically for student session.</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (existingAttempt) {
-    const formattedDate = existingAttempt.submittedAt
-      ? new Date(existingAttempt.submittedAt).toLocaleDateString('en-IN', {
-          day: 'numeric',
-          month: 'short',
-          year: 'numeric'
-        })
-      : 'Recently';
-
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 sm:p-6">
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 max-w-lg w-full text-center space-y-6 shadow-xl">
-          <div className="w-16 h-16 rounded-2xl bg-amber-100 border border-amber-300 text-amber-700 flex items-center justify-center mx-auto shadow-sm">
-            <Lock className="w-8 h-8" />
-          </div>
-
-          <div className="space-y-2">
-            <span className="text-xs font-black text-amber-800 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full uppercase tracking-wider">
-              Test Already Attempted
-            </span>
-            <h2 className="text-xl sm:text-2xl font-black text-slate-900 leading-snug">
-              {existingAttempt.testTitle || testSlug.toUpperCase().replace(/-/g, ' ')}
-            </h2>
-            <p className="text-xs text-slate-600 leading-relaxed font-medium">
-              Aapne yeh test pehle hi de diya hai ({formattedDate})! Ek student ek test ko sirf ek baar hi attempt kar sakta hai. Aap wapas answer change ya re-test nahi kar sakte.
-            </p>
-          </div>
-
-          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 grid grid-cols-3 gap-2 text-center">
-            <div>
-              <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Your Score</div>
-              <div className="text-lg sm:text-xl font-black text-blue-600 mt-1">
-                {existingAttempt.score} <span className="text-xs text-slate-400 font-normal">/ {existingAttempt.totalMarks ?? existingAttempt.totalQuestions}</span>
-              </div>
-            </div>
-            <div className="border-x border-slate-200">
-              <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Accuracy</div>
-              <div className="text-lg sm:text-xl font-black text-emerald-600 mt-1">
-                {existingAttempt.accuracyPercent}%
-              </div>
-            </div>
-            <div>
-              <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Class</div>
-              <div className="text-lg sm:text-xl font-black text-slate-700 mt-1">
-                Class {existingAttempt.classLevel || '10'}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-3 pt-2">
-            <button
-              onClick={() => navigate(`/tests/${testSlug}/result`)}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-black py-3.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-md transition-transform hover:scale-[1.02]"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>View Scorecard & Solutions</span>
-            </button>
-            <button
-              onClick={() => navigate('/profile')}
-              className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-extrabold py-3.5 rounded-xl text-xs border border-slate-300 transition-colors"
-            >
-              <span>Go to My Profile</span>
-            </button>
-          </div>
         </div>
       </div>
     );

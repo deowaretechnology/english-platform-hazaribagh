@@ -135,6 +135,18 @@ export async function handleGetUserProfile(req: Request, res: Response) {
         .sort({ submittedAt: -1 } as any)
         .lean();
 
+      // Attempt number per test (1 = first time), oldest first. Computed here so
+      // older records without a stored number are numbered correctly too.
+      const attemptNoById = new Map<string, number>();
+      const perTestCounter = new Map<string, number>();
+      [...attempts]
+        .sort((a: any, b: any) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime())
+        .forEach((att: any) => {
+          const n = (perTestCounter.get(att.testSlug) || 0) + 1;
+          perTestCounter.set(att.testSlug, n);
+          attemptNoById.set(att._id.toString(), n);
+        });
+
       return res.json({
         success: true,
         user: userDoc
@@ -152,7 +164,11 @@ export async function handleGetUserProfile(req: Request, res: Response) {
           testSlug: att.testSlug,
           testTitle: att.testTitle,
           classLevel: att.classLevel,
+          attemptNumber: attemptNoById.get(att._id.toString()) || 1,
+          totalAttemptsForTest: perTestCounter.get(att.testSlug) || 1,
           score: att.score,
+          totalMarks: att.totalMarks,
+          marksPerQuestion: att.marksPerQuestion,
           totalQuestions: att.totalQuestions,
           accuracyPercent: att.accuracyPercent,
           questions: att.questions,

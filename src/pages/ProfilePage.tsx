@@ -28,6 +28,8 @@ interface QuestionSnapshot {
 
 interface DBTestAttempt {
   id: string;
+  attemptNumber?: number;
+  totalAttemptsForTest?: number;
   testSlug: string;
   testTitle: string;
   classLevel: string;
@@ -229,6 +231,11 @@ export const ProfilePage: React.FC = () => {
                     day: 'numeric'
                   });
 
+                  const timeStr = new Date(att.submittedAt).toLocaleTimeString('en-IN', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  });
+
                   return (
                     <div key={att.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 hover:border-blue-300 transition-colors">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
@@ -237,8 +244,13 @@ export const ProfilePage: React.FC = () => {
                             Class {att.classLevel}
                           </span>
                           <span className="font-bold text-sm text-slate-900">{att.testTitle}</span>
+                          {(att.totalAttemptsForTest ?? 1) > 1 && (
+                            <span className="ml-2 text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded uppercase">
+                              Attempt {att.attemptNumber} of {att.totalAttemptsForTest}
+                            </span>
+                          )}
                         </div>
-                        <div className="text-xs text-slate-500">Submitted on {dateStr}</div>
+                        <div className="text-xs text-slate-500">Submitted on {dateStr} at {timeStr}</div>
                       </div>
 
                       <div className="flex items-center justify-between text-xs pt-1">
